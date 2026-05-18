@@ -25,17 +25,61 @@ export default function LoginPage() {
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
+  
     if (!email || !password) {
       toast.error('يرجى إدخال البريد الإلكتروني وكلمة المرور')
       return
     }
+  
     setLoading(true)
+  
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+  
       if (error) {
         toast.error('بيانات الدخول غير صحيحة')
+        setLoading(false)
+        return
       }
-    } finally {
+  
+      const userId = data.user?.id
+  
+      if (!userId) {
+        toast.error('تعذر قراءة بيانات المستخدم')
+        setLoading(false)
+        return
+      }
+  
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single()
+  
+      if (profileError || !profileData) {
+        toast.error('لم يتم العثور على صلاحية المستخدم')
+        setLoading(false)
+        return
+      }
+  
+      if (profileData.role === 'admin') {
+        router.replace('/admin')
+        return
+      }
+  
+      if (profileData.role === 'factory') {
+        router.replace('/factory')
+        return
+      }
+  
+      toast.error('نوع المستخدم غير معروف')
+      setLoading(false)
+    } catch (err) {
+      console.error(err)
+      toast.error('حدث خطأ أثناء تسجيل الدخول')
       setLoading(false)
     }
   }
