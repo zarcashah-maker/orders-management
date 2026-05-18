@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Order, Factory } from '@/types'
+import { Order, Factory as FactoryType } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { formatDate } from '@/lib/utils'
 import { Package, Clock, CheckCircle, Factory, TrendingUp, ArrowLeft } from 'lucide-react'
@@ -130,7 +130,7 @@ export default function AdminDashboard() {
                     <StatusBadge status={order.status} size="sm" />
                   </div>
                   <p className="text-sm font-medium text-stone-800 truncate">{order.title}</p>
-                  <p className="text-xs text-stone-400">{(order.factory as unknown as Factory)?.name}</p>
+                  <p className="text-xs text-stone-400">{(order.factory as unknown as FactoryType)?.name}</p>
                 </div>
                 <span className="text-xs text-stone-400 whitespace-nowrap">{formatDate(order.created_at)}</span>
               </Link>
