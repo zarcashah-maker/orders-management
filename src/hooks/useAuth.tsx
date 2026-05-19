@@ -26,45 +26,83 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchProfile(session.user.id)
-      } else {
-        setLoading(false)
-      }
-    })
+    async function initAuth() {
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession()
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+        if (error) {
+          console.error('Session error:', error)
+          setUser(null)
+          setProfile(null)
+          return
+        }
+
         setUser(session?.user ?? null)
+
         if (session?.user) {
           await fetchProfile(session.user.id)
         } else {
           setProfile(null)
-          setLoading(false)
         }
+      } catch (err) {
+        console.error('Init auth error:', err)
+        setUser(null)
+        setProfile(null)
+      } finally {
+        setLoading(false)
       }
-    )
+    }
+
+    initAuth()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setLoading(true)
+
+      try {
+        setUser(session?.user ?? null)
+
+        if (session?.user) {
+          await fetchProfile(session.user.id)
+        } else {
+          setProfile(null)
+        }
+      } catch (err) {
+        console.error('Auth change error:', err)
+        setProfile(null)
+      } finally {
+        setLoading(false)
+      }
+    })
 
     return () => subscription.unsubscribe()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function fetchProfile(userId: string) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
-      .single()
+      .maybeSingle()
+
+    if (error) {
+      console.error('Profile error:', error)
+      setProfile(null)
+      return
+    }
+
     setProfile(data)
-    setLoading(false)
   }
 
   async function signOut() {
     await supabase.auth.signOut()
+    setUser(null)
+    setProfile(null)
   }
 
   return (
