@@ -28,10 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function initAuth() {
       try {
-        const {
-          data: { session },
-          error,
-        } = await supabase.auth.getSession()
+        const { data: { session }, error } = await supabase.auth.getSession()
 
         if (error) {
           console.error('Session error:', error)
@@ -58,26 +55,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initAuth()
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setLoading(true)
-
-      try {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
         setUser(session?.user ?? null)
 
-        if (session?.user) {
-          await fetchProfile(session.user.id)
-        } else {
+        if (!session?.user) {
           setProfile(null)
+          setLoading(false)
+          return
         }
-      } catch (err) {
-        console.error('Auth change error:', err)
-        setProfile(null)
-      } finally {
-        setLoading(false)
+
+        setLoading(true)
+
+        setTimeout(() => {
+          fetchProfile(session.user.id)
+            .catch((err) => {
+              console.error('Auth profile error:', err)
+              setProfile(null)
+            })
+            .finally(() => {
+              setLoading(false)
+            })
+        }, 0)
       }
-    })
+    )
 
     return () => subscription.unsubscribe()
     // eslint-disable-next-line react-hooks/exhaustive-deps
