@@ -7,6 +7,14 @@ export type OrderStatus =
   | 'completed'
   | 'cancelled'
 
+export type ProductType =
+  | 'graduation_cap'
+  | 'graduation_sash'
+  | 'graduation_jacket'
+  | 'hoodie'
+  | 'tshirt'
+  | 'other'
+
 export interface Profile {
   id: string
   email: string
@@ -32,6 +40,9 @@ export interface Order {
   order_number: string
   title: string
   description: string | null
+  customer_phone: string | null
+  product_type: ProductType | null
+  details: Record<string, unknown> | null
   status: OrderStatus
   factory_id: string
   created_by: string
@@ -43,6 +54,7 @@ export interface Order {
   updated_at: string
   factory?: Factory
   images?: OrderImage[]
+  attachments?: Attachment[]
   creator?: Profile
 }
 
@@ -51,6 +63,36 @@ export interface OrderImage {
   order_id: string
   url: string
   caption: string | null
+  created_at: string
+}
+
+export interface Attachment {
+  id: string
+  order_id: string
+  file_url: string
+  file_name: string
+  file_type: string | null
+  storage_path: string | null
+  notes: string | null
+  created_at: string
+}
+
+export interface Comment {
+  id: string
+  order_id: string
+  user_id: string | null
+  body: string
+  is_internal: boolean
+  created_at: string
+}
+
+export interface StatusHistory {
+  id: string
+  order_id: string
+  old_status: OrderStatus | null
+  new_status: OrderStatus
+  changed_by: string | null
+  notes: string | null
   created_at: string
 }
 

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { Order, Factory as FactoryType } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { formatDate } from '@/lib/utils'
+import { getOrderThumbnail, getProductTypeLabel } from '@/lib/orders'
 import { Package, Clock, CheckCircle, Factory, TrendingUp, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
@@ -27,7 +28,7 @@ export default function AdminDashboard() {
       const [{ data: ordersData }, { data: factoriesData }] = await Promise.all([
         supabase
           .from('orders')
-          .select('*, factory:factories(name)')
+          .select('*, factory:factories(name), images:order_images(*), attachments(*)')
           .order('created_at', { ascending: false })
           .limit(5),
         supabase.from('factories').select('id').eq('is_active', true),
@@ -124,13 +125,23 @@ export default function AdminDashboard() {
                 href={`/admin/orders/${order.id}`}
                 className="flex items-center gap-4 px-5 py-3.5 hover:bg-stone-50 transition-colors"
               >
+                <div className="w-12 h-12 rounded-xl overflow-hidden bg-stone-100 border border-stone-200 flex items-center justify-center flex-shrink-0">
+                  {getOrderThumbnail(order) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={getOrderThumbnail(order)!} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <Package size={18} className="text-stone-300" />
+                  )}
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="text-xs font-mono text-stone-400">{order.order_number}</span>
                     <StatusBadge status={order.status} size="sm" />
                   </div>
-                  <p className="text-sm font-medium text-stone-800 truncate">{order.title}</p>
-                  <p className="text-xs text-stone-400">{(order.factory as unknown as FactoryType)?.name}</p>
+                  <p className="text-sm font-medium text-stone-800 truncate">{getProductTypeLabel(order.product_type, order.title)}</p>
+                  <p className="text-xs text-stone-400">
+                    {order.customer_phone || 'لا يوجد جوال'} · {(order.factory as unknown as FactoryType)?.name || 'غير مسند'}
+                  </p>
                 </div>
                 <span className="text-xs text-stone-400 whitespace-nowrap">{formatDate(order.created_at)}</span>
               </Link>

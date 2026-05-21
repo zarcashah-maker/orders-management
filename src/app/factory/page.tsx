@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { Order, OrderStatus } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { formatDate } from '@/lib/utils'
+import { getFactoryOrderType, getOrderThumbnail } from '@/lib/orders'
 import { useAuth } from '@/hooks/useAuth'
 import { Package, Calendar, Hash, Clock, CheckCircle, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
@@ -19,7 +20,7 @@ export default function FactoryDashboard() {
     if (!profile?.factory_id) return
     supabase
       .from('orders')
-      .select('*')
+      .select('*, images:order_images(*), attachments(*)')
       .eq('factory_id', profile.factory_id)
       .order('created_at', { ascending: false })
       .then(({ data }) => {
@@ -82,12 +83,20 @@ export default function FactoryDashboard() {
                 className="block bg-white rounded-2xl border border-stone-200/60 shadow-sm p-4 hover:shadow-md hover:border-stone-300 transition-all"
               >
                 <div className="flex items-start justify-between gap-3">
+                  <div className="w-14 h-14 rounded-xl overflow-hidden bg-stone-100 border border-stone-200 flex items-center justify-center flex-shrink-0">
+                    {getOrderThumbnail(order) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={getOrderThumbnail(order)!} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <Package size={18} className="text-stone-300" />
+                    )}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-mono text-xs text-stone-400">{order.order_number}</span>
                       <StatusBadge status={order.status as OrderStatus} size="sm" />
                     </div>
-                    <p className="font-medium text-stone-900 truncate">{order.title}</p>
+                    <p className="font-medium text-stone-900 truncate">{getFactoryOrderType(order.product_type, order.title)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 mt-3 text-xs text-stone-400">
