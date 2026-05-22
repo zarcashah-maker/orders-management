@@ -4,6 +4,7 @@ alter table public.orders
     product_type is null or product_type in (
       'graduation_cap',
       'graduation_sash',
+      'graduation_gown',
       'graduation_jacket',
       'hoodie',
       'tshirt',

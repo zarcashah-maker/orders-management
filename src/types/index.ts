@@ -10,6 +10,7 @@ export type OrderStatus =
 export type ProductType =
   | 'graduation_cap'
   | 'graduation_sash'
+  | 'graduation_gown'
   | 'graduation_jacket'
   | 'hoodie'
   | 'tshirt'

@@ -2,8 +2,12 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Factory } from '@/types'
-import { generateOrderNumber } from '@/lib/utils'
+import { Factory, ProductType } from '@/types'
+import {
+  getProductTypeLabel,
+  PRODUCT_DETAIL_FIELDS,
+  PRODUCT_TYPE_OPTIONS,
+} from '@/lib/orders'
 import { X, Package } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
@@ -15,8 +19,11 @@ interface Props {
 }
 
 export function NewOrderModal({ factories, onClose, onCreated }: Props) {
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
+  const [productType, setProductType] = useState<ProductType | ''>('')
+  const [details, setDetails] = useState<Record<string, string>>({})
+  const [sallaOrderNumber, setSallaOrderNumber] = useState('')
+  const [customerPhone, setCustomerPhone] = useState('')
+  const [notes, setNotes] = useState('')
   const [factoryId, setFactoryId] = useState(factories[0]?.id || '')
   const [quantity, setQuantity] = useState('')
   const [dueDate, setDueDate] = useState('')
@@ -26,19 +33,28 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!title || !factoryId) {
-      toast.error('يرجى إدخال العنوان واختيار المصنع')
+    if (!productType || !sallaOrderNumber.trim() || !factoryId) {
+      toast.error('يرجى اختيار نوع المنتج وإدخال رقم سلة واختيار المصنع')
       return
     }
     setSaving(true)
     try {
+      const orderDetails = Object.fromEntries(
+        Object.entries(details)
+          .map(([key, value]) => [key, value.trim()])
+          .filter(([, value]) => value)
+      )
       const { error } = await supabase.from('orders').insert({
-        order_number: generateOrderNumber(),
-        title: title.trim(),
-        description: description.trim() || null,
+        order_number: sallaOrderNumber.trim(),
+        title: getProductTypeLabel(productType),
+        description: null,
+        customer_phone: customerPhone.trim() || null,
+        product_type: productType,
+        details: orderDetails,
         factory_id: factoryId,
         quantity: quantity ? parseInt(quantity) : null,
         due_date: dueDate || null,
+        notes: notes.trim() || null,
         status: 'pending',
         created_by: user!.id,
       })
@@ -54,7 +70,7 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" dir="rtl">
-      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl animate-slide-up">
+      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[calc(100vh-2rem)] shadow-2xl animate-slide-up overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-stone-100">
           <div className="flex items-center gap-3">
@@ -69,50 +85,107 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {/* Title */}
+        <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto max-h-[calc(100vh-6.5rem)]">
+          {/* Product type */}
           <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1.5">عنوان الطلب *</label>
-            <input
-              type="text"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder="مثال: طباعة تيشيرت موسم الصيف"
-              className="w-full px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm
-                focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
-            />
-          </div>
-
-          {/* Factory */}
-          <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1.5">المصنع *</label>
+            <label className="block text-sm font-medium text-stone-700 mb-1.5">نوع المنتج *</label>
             <select
-              value={factoryId}
-              onChange={e => setFactoryId(e.target.value)}
+              value={productType}
+              onChange={e => {
+                setProductType(e.target.value as ProductType | '')
+                setDetails({})
+              }}
               className="w-full px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm
                 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent appearance-none"
             >
-              {factories.map(f => (
-                <option key={f.id} value={f.id}>{f.name}</option>
+              <option value="">اختر نوع المنتج</option>
+              {PRODUCT_TYPE_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
           </div>
 
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1.5">الوصف</label>
-            <textarea
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              rows={3}
-              placeholder="تفاصيل إضافية عن الطلب..."
-              className="w-full px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm resize-none
-                focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
-            />
+          {/* Admin-only Salla info */}
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-stone-700 mb-1.5">رقم طلب سلة *</label>
+              <input
+                type="text"
+                value={sallaOrderNumber}
+                onChange={e => setSallaOrderNumber(e.target.value)}
+                placeholder="مثال: 123456789"
+                className="w-full px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm
+                  focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+                dir="ltr"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-stone-700 mb-1.5">جوال العميل</label>
+              <input
+                type="tel"
+                value={customerPhone}
+                onChange={e => setCustomerPhone(e.target.value)}
+                placeholder="اختياري"
+                className="w-full px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm
+                  focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+                dir="ltr"
+              />
+            </div>
           </div>
 
-          {/* Quantity + Due date */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Product-specific fields */}
+          {productType && (
+            <div className="rounded-2xl bg-brand-50/40 border border-brand-100 p-4">
+              <p className="text-sm font-semibold text-stone-800 mb-3">تفاصيل {getProductTypeLabel(productType)}</p>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {PRODUCT_DETAIL_FIELDS[productType].map(field => (
+                  <div key={field.key}>
+                    <label className="block text-sm font-medium text-stone-700 mb-1.5">{field.label}</label>
+                    {field.type === 'select' ? (
+                      <select
+                        value={details[field.key] || ''}
+                        onChange={e => setDetails(current => ({ ...current, [field.key]: e.target.value }))}
+                        className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-sm
+                          focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent appearance-none"
+                      >
+                        <option value="">اختر</option>
+                        {field.options?.map(option => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={details[field.key] || ''}
+                        onChange={e => setDetails(current => ({ ...current, [field.key]: e.target.value }))}
+                        placeholder={field.placeholder}
+                        className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-sm
+                          focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            {/* Factory */}
+            <div>
+              <label className="block text-sm font-medium text-stone-700 mb-1.5">المصنع *</label>
+              <select
+                value={factoryId}
+                onChange={e => setFactoryId(e.target.value)}
+                className="w-full px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm
+                  focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent appearance-none"
+              >
+                {factories.map(f => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Quantity */}
             <div>
               <label className="block text-sm font-medium text-stone-700 mb-1.5">الكمية</label>
               <input
@@ -126,6 +199,9 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
                 dir="ltr"
               />
             </div>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-stone-700 mb-1.5">تاريخ التسليم</label>
               <input
@@ -137,6 +213,19 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
                 dir="ltr"
               />
             </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-1.5">ملاحظات</label>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              rows={3}
+              placeholder="أي تعليمات مهمة للمصنع..."
+              className="w-full px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm resize-none
+                focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+            />
           </div>
 
           {/* Actions */}
