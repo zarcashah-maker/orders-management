@@ -1,17 +1,19 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Order, Factory, OrderStatus, AIChatMessage } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { formatDate, formatDateTime } from '@/lib/utils'
+import { getDetailEntries, getProductTypeLabel, isImageAttachment } from '@/lib/orders'
 import {
   ArrowRight, Sparkles, Send, ChevronDown,
-  Package, Calendar, Hash, Building2
+  Package, Calendar, Hash, Building2, FileDown, Image as ImageIcon, Phone
 } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
+import { useAuth } from '@/hooks/useAuth'
 
 const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
   { value: 'pending', label: 'قيد الانتظار' },
@@ -23,7 +25,6 @@ const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
 
 export default function OrderDetailPage() {
   const { id } = useParams()
-  const router = useRouter()
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
   const [updatingStatus, setUpdatingStatus] = useState(false)
@@ -31,13 +32,14 @@ export default function OrderDetailPage() {
   const [input, setInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const chatRef = useRef<HTMLDivElement>(null)
+  const { profile } = useAuth()
   const supabase = createClient()
 
   useEffect(() => {
     async function load() {
       const { data } = await supabase
         .from('orders')
-        .select('*, factory:factories(*)')
+        .select('*, factory:factories(*), images:order_images(*), attachments(*)')
         .eq('id', id)
         .single()
       setOrder(data)
@@ -55,6 +57,7 @@ export default function OrderDetailPage() {
 
   async function updateStatus(newStatus: OrderStatus) {
     if (!order) return
+    const oldStatus = order.status
     setUpdatingStatus(true)
     const { error } = await supabase
       .from('orders')
@@ -63,6 +66,13 @@ export default function OrderDetailPage() {
     if (error) {
       toast.error('فشل تحديث الحالة')
     } else {
+      await supabase.from('order_status_history').insert({
+        id: crypto.randomUUID(),
+        order_id: order.id,
+        old_status: oldStatus,
+        new_status: newStatus,
+        changed_by: profile?.id || null,
+      })
       setOrder({ ...order, status: newStatus })
       toast.success('تم تحديث الحالة')
     }
@@ -85,13 +95,13 @@ export default function OrderDetailPage() {
           messages: newMessages,
           orderContext: {
             order_number: order.order_number,
-            title: order.title,
-            description: order.description,
+            product_type: order.product_type,
             status: order.status,
             factory: (order.factory as unknown as Factory)?.name,
+            details: order.details,
             quantity: order.quantity,
             due_date: order.due_date,
-            notes: order.notes,
+            notes: order.general_notes,
             created_at: order.created_at,
           },
         }),
@@ -124,6 +134,9 @@ export default function OrderDetailPage() {
   }
 
   const factory = order.factory as unknown as Factory
+  const detailEntries = getDetailEntries(order.product_type, order.details)
+  const imageAttachments = (order.attachments || []).filter(isImageAttachment)
+  const otherAttachments = (order.attachments || []).filter(attachment => !isImageAttachment(attachment))
 
   return (
     <div className="space-y-5 animate-fade-in max-w-4xl">
@@ -143,10 +156,7 @@ export default function OrderDetailPage() {
               </span>
               <StatusBadge status={order.status} />
             </div>
-            <h1 className="text-xl font-display font-bold text-stone-900">{order.title}</h1>
-            {order.description && (
-              <p className="text-stone-500 text-sm mt-1">{order.description}</p>
-            )}
+            <h1 className="text-xl font-display font-bold text-stone-900">{getProductTypeLabel(order.product_type)}</h1>
           </div>
 
           {/* Status changer */}
@@ -200,12 +210,86 @@ export default function OrderDetailPage() {
               <p className="text-sm font-medium text-stone-700">{formatDateTime(order.created_at)}</p>
             </div>
           </div>
+          <div className="flex items-center gap-2">
+            <Phone size={15} className="text-stone-400" />
+            <div>
+              <p className="text-xs text-stone-400">جوال العميل</p>
+              <p className="text-sm font-medium text-stone-700" dir="ltr">{order.customer_phone || '—'}</p>
+            </div>
+          </div>
         </div>
 
-        {order.notes && (
+        {detailEntries.length > 0 && (
+          <div className="mt-5 pt-5 border-t border-stone-100">
+            <p className="text-sm font-bold text-stone-900 mb-3">تفاصيل المنتج</p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {detailEntries.map(detail => (
+                <div key={detail.key} className="rounded-xl bg-stone-50 border border-stone-100 p-3">
+                  <p className="text-xs text-stone-400">{detail.label}</p>
+                  <p className="text-sm font-medium text-stone-800 mt-1">{detail.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {order.general_notes && (
           <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-xl">
             <p className="text-xs font-semibold text-amber-700 mb-1">ملاحظات</p>
-            <p className="text-sm text-amber-900">{order.notes}</p>
+            <p className="text-sm text-amber-900">{order.general_notes}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Attachments */}
+      <div className="bg-white rounded-2xl border border-stone-200/60 shadow-sm p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <FileDown size={17} className="text-stone-400" />
+          <h2 className="font-bold text-stone-900">الصور والمرفقات</h2>
+        </div>
+
+        {imageAttachments.length === 0 && otherAttachments.length === 0 ? (
+          <p className="text-sm text-stone-400">لا توجد مرفقات لهذا الطلب</p>
+        ) : (
+          <div className="space-y-4">
+            {imageAttachments.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {imageAttachments.map(attachment => (
+                  <a
+                    key={attachment.id}
+                    href={attachment.file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group block rounded-2xl overflow-hidden border border-stone-200 bg-stone-50"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={attachment.file_url} alt={attachment.file_name} className="h-36 w-full object-cover group-hover:scale-[1.02] transition-transform" />
+                    <div className="p-2 flex items-center gap-2 text-xs text-stone-500">
+                      <ImageIcon size={13} />
+                      <span className="truncate">{attachment.file_name}</span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+
+            {otherAttachments.length > 0 && (
+              <div className="space-y-2">
+                {otherAttachments.map(attachment => (
+                  <a
+                    key={attachment.id}
+                    href={attachment.file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    download={attachment.file_name}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-700 hover:border-brand-200 hover:bg-brand-50/40"
+                  >
+                    <span className="truncate">{attachment.file_name}</span>
+                    <FileDown size={16} className="text-stone-400 flex-shrink-0" />
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -7,8 +7,9 @@ import {
   getProductTypeLabel,
   PRODUCT_DETAIL_FIELDS,
   PRODUCT_TYPE_OPTIONS,
+  isImageAttachment,
 } from '@/lib/orders'
-import { X, Package } from 'lucide-react'
+import { X, Package, Image as ImageIcon, Paperclip } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -24,12 +25,14 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
   const [sallaOrderNumber, setSallaOrderNumber] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [notes, setNotes] = useState('')
+  const [designImages, setDesignImages] = useState<File[]>([])
+  const [attachments, setAttachments] = useState<File[]>([])
   const [factoryId, setFactoryId] = useState(factories[0]?.id || '')
   const [quantity, setQuantity] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
-  const { user } = useAuth()
+  const { profile } = useAuth()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -44,24 +47,78 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
           .map(([key, value]) => [key, value.trim()])
           .filter(([, value]) => value)
       )
-      const { error } = await supabase.from('orders').insert({
+      const { data: order, error } = await supabase.from('orders').insert({
+        id: crypto.randomUUID(),
         order_number: sallaOrderNumber.trim(),
-        title: getProductTypeLabel(productType),
-        description: null,
         customer_phone: customerPhone.trim() || null,
         product_type: productType,
         details: orderDetails,
-        factory_id: factoryId,
-        quantity: quantity ? parseInt(quantity) : null,
+        assigned_factory_id: factoryId,
+        quantity: quantity ? parseInt(quantity) : 1,
         due_date: dueDate || null,
-        notes: notes.trim() || null,
+        general_notes: notes.trim() || null,
         status: 'pending',
-        created_by: user!.id,
-      })
+        created_by: profile?.id || null,
+        order_date: new Date().toISOString().slice(0, 10),
+      }).select('id').single()
       if (error) throw error
+
+      const files = [
+        ...designImages.map(file => ({ file, isDesignImage: true })),
+        ...attachments.map(file => ({ file, isDesignImage: false })),
+      ]
+
+      if (files.length > 0 && order?.id) {
+        const uploaded = await Promise.all(files.map(async ({ file, isDesignImage }) => {
+          const safeName = file.name.replace(/[^\w.\-]+/g, '-')
+          const storagePath = `${order.id}/${crypto.randomUUID()}-${safeName}`
+          const { error: uploadError } = await supabase.storage
+            .from('order-attachments')
+            .upload(storagePath, file)
+          if (uploadError) throw uploadError
+
+          const { data: publicUrlData } = supabase.storage
+            .from('order-attachments')
+            .getPublicUrl(storagePath)
+
+          return {
+            file,
+            isDesignImage,
+            storagePath,
+            publicUrl: publicUrlData.publicUrl,
+          }
+        }))
+
+        const attachmentRows = uploaded.map(item => ({
+          id: crypto.randomUUID(),
+          order_id: order.id,
+          file_url: item.publicUrl,
+          file_name: item.file.name,
+          attachment_type: item.file.type || 'application/octet-stream',
+          storage_path: item.storagePath,
+          notes: item.isDesignImage ? 'Design image' : null,
+        }))
+        const { error: attachmentError } = await supabase.from('attachments').insert(attachmentRows)
+        if (attachmentError) throw attachmentError
+
+        const imageRows = uploaded
+          .filter(item => item.isDesignImage || isImageAttachment({ file_name: item.file.name, attachment_type: item.file.type || 'application/octet-stream' }))
+          .map(item => ({
+            order_id: order.id,
+            url: item.publicUrl,
+            caption: item.isDesignImage ? 'Design image' : item.file.name,
+          }))
+
+        if (imageRows.length > 0) {
+          const { error: imageError } = await supabase.from('order_images').insert(imageRows)
+          if (imageError) throw imageError
+        }
+      }
+
       toast.success('تم إنشاء الطلب بنجاح')
       onCreated()
-    } catch {
+    } catch (err) {
+      console.error('Create order error:', err)
       toast.error('حدث خطأ أثناء الإنشاء')
     } finally {
       setSaving(false)
@@ -226,6 +283,38 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
               className="w-full px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm resize-none
                 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
             />
+          </div>
+
+          {/* Uploads */}
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="rounded-2xl bg-stone-50 border border-stone-200 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <ImageIcon size={16} className="text-stone-500" />
+                <label className="text-sm font-semibold text-stone-800">صور التصميم / المنتج</label>
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={e => setDesignImages(Array.from(e.target.files || []))}
+                className="block w-full text-sm text-stone-500 file:ml-3 file:border-0 file:rounded-lg file:bg-brand-500 file:text-white file:px-3 file:py-2 file:text-sm"
+              />
+              <p className="mt-2 text-xs text-stone-400">{designImages.length ? `${designImages.length} ملف محدد` : 'الصورة هي المتطلب الأساسي للطلب'}</p>
+            </div>
+
+            <div className="rounded-2xl bg-stone-50 border border-stone-200 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Paperclip size={16} className="text-stone-500" />
+                <label className="text-sm font-semibold text-stone-800">مرفقات إضافية</label>
+              </div>
+              <input
+                type="file"
+                multiple
+                onChange={e => setAttachments(Array.from(e.target.files || []))}
+                className="block w-full text-sm text-stone-500 file:ml-3 file:border-0 file:rounded-lg file:bg-stone-700 file:text-white file:px-3 file:py-2 file:text-sm"
+              />
+              <p className="mt-2 text-xs text-stone-400">{attachments.length ? `${attachments.length} ملف محدد` : 'صور، PDF، أو ملفات تنفيذ'}</p>
+            </div>
           </div>
 
           {/* Actions */}

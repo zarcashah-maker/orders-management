@@ -34,9 +34,9 @@ export function Navbar({ title = 'نظام الطلبات' }: NavbarProps) {
         <div className="flex items-center gap-2 px-3 py-1.5 bg-stone-100 rounded-full">
           <User size={14} className="text-stone-500" />
           <span className="text-sm text-stone-700 font-medium">
-            {profile?.full_name || profile?.email?.split('@')[0] || 'مستخدم'}
+            {profile?.name || profile?.email?.split('@')[0] || 'مستخدم'}
           </span>
-          {profile?.role === 'admin' && (
+          {profile?.role === 'Admin' && (
             <span className="text-xs bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded-full font-medium">
               مدير
             </span>

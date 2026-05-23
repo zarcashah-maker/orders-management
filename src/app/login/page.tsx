@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { createClient } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 import { Eye, EyeOff, Package } from 'lucide-react'
+import Link from 'next/link'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -37,8 +38,8 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (user && profile) {
-      if (profile.role === 'admin') router.replace('/admin')
-      else if (profile.role === 'factory') router.replace('/factory')
+      if (profile.role === 'Admin') router.replace('/admin')
+      else if (profile.role === 'Factory') router.replace('/factory')
     }
   }, [user, profile, router])
 
@@ -84,9 +85,9 @@ export default function LoginPage() {
       }
   
       const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
+        .from('app_users')
         .select('role')
-        .eq('id', userId)
+        .eq('auth_user_id', userId)
         .single()
   
       if (profileError || !profileData) {
@@ -103,12 +104,12 @@ export default function LoginPage() {
         return
       }
   
-      if (profileData.role === 'admin') {
+      if (profileData.role === 'Admin') {
         router.replace('/admin')
         return
       }
   
-      if (profileData.role === 'factory') {
+      if (profileData.role === 'Factory') {
         router.replace('/factory')
         return
       }
@@ -239,6 +240,15 @@ export default function LoginPage() {
                 'دخول'
               )}
             </button>
+
+            <div className="text-center">
+              <Link
+                href="/forgot-password"
+                className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors"
+              >
+                نسيت كلمة المرور؟
+              </Link>
+            </div>
           </form>
         </div>
 

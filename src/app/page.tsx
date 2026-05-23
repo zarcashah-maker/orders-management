@@ -14,9 +14,9 @@ export default function HomePage() {
       router.replace('/login')
       return
     }
-    if (profile?.role === 'admin') {
+    if (profile?.role === 'Admin') {
       router.replace('/admin')
-    } else if (profile?.role === 'factory') {
+    } else if (profile?.role === 'Factory') {
       router.replace('/factory')
     } else {
       router.replace('/login')

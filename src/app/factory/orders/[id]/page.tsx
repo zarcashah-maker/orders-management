@@ -7,8 +7,9 @@ import { Order, OrderStatus } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { formatDate, formatDateTime } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
+import { getDetailEntries, getFactoryOrderType, isImageAttachment, ORDER_STATUS_OPTIONS } from '@/lib/orders'
 import {
-  ArrowRight, Package, Calendar, Hash, MessageSquare
+  ArrowRight, Package, Calendar, Hash, MessageSquare, FileDown, ChevronDown, Image as ImageIcon
 } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
@@ -17,8 +18,7 @@ export default function FactoryOrderDetail() {
   const { id } = useParams()
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
-  const [notes, setNotes] = useState('')
-  const [savingNotes, setSavingNotes] = useState(false)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
   const { profile } = useAuth()
   const supabase = createClient()
 
@@ -26,28 +26,41 @@ export default function FactoryOrderDetail() {
     async function load() {
       const { data } = await supabase
         .from('orders')
-        .select('*')
+        .select('*, images:order_images(*), attachments(*)')
         .eq('id', id)
-        .eq('factory_id', profile?.factory_id || '')
+        .eq('assigned_factory_id', profile?.factory_id || '')
         .single()
       setOrder(data)
-      setNotes(data?.notes || '')
       setLoading(false)
     }
     if (id && profile?.factory_id) load()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, profile])
 
-  async function updateNotes() {
+  async function updateStatus(newStatus: OrderStatus) {
     if (!order) return
-    setSavingNotes(true)
+    const oldStatus = order.status
+    setUpdatingStatus(true)
     const { error } = await supabase
       .from('orders')
-      .update({ notes, updated_at: new Date().toISOString() })
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq('id', order.id)
-    if (error) toast.error('فشل الحفظ')
-    else toast.success('تم حفظ الملاحظات')
-    setSavingNotes(false)
+      .eq('assigned_factory_id', profile?.factory_id || '')
+
+    if (error) {
+      toast.error('فشل تحديث الحالة')
+    } else {
+      await supabase.from('order_status_history').insert({
+        id: crypto.randomUUID(),
+        order_id: order.id,
+        old_status: oldStatus,
+        new_status: newStatus,
+        changed_by: profile?.id || null,
+      })
+      setOrder({ ...order, status: newStatus })
+      toast.success('تم تحديث الحالة')
+    }
+    setUpdatingStatus(false)
   }
 
   if (loading) return (
@@ -63,6 +76,10 @@ export default function FactoryOrderDetail() {
       <Link href="/factory" className="text-brand-600 text-sm mt-2 inline-block">العودة</Link>
     </div>
   )
+
+  const detailEntries = getDetailEntries(order.product_type, order.details)
+  const imageAttachments = (order.attachments || []).filter(isImageAttachment)
+  const otherAttachments = (order.attachments || []).filter(attachment => !isImageAttachment(attachment))
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -82,10 +99,7 @@ export default function FactoryOrderDetail() {
               <span className="font-mono text-xs text-stone-400">{order.order_number}</span>
               <StatusBadge status={order.status as OrderStatus} />
             </div>
-            <h1 className="font-bold text-stone-900">{order.title}</h1>
-            {order.description && (
-              <p className="text-sm text-stone-500 mt-1">{order.description}</p>
-            )}
+            <h1 className="font-bold text-stone-900">{getFactoryOrderType(order.product_type)}</h1>
           </div>
         </div>
 
@@ -106,6 +120,38 @@ export default function FactoryOrderDetail() {
           </div>
         </div>
 
+        <div className="mt-4 pt-4 border-t border-stone-100">
+          <label className="block text-xs text-stone-400 mb-1">تحديث الحالة</label>
+          <div className="relative inline-block">
+            <select
+              value={order.status}
+              onChange={e => updateStatus(e.target.value as OrderStatus)}
+              disabled={updatingStatus}
+              className="px-3 py-2 pl-7 bg-stone-50 border border-stone-200 rounded-xl text-sm
+                focus:outline-none focus:ring-2 focus:ring-brand-400 appearance-none cursor-pointer disabled:opacity-50"
+            >
+              {ORDER_STATUS_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+            <ChevronDown size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
+          </div>
+        </div>
+
+        {detailEntries.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-stone-100">
+            <p className="text-sm font-bold text-stone-900 mb-3">تفاصيل المنتج</p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {detailEntries.map(detail => (
+                <div key={detail.key} className="rounded-xl bg-stone-50 border border-stone-100 p-3">
+                  <p className="text-xs text-stone-400">{detail.label}</p>
+                  <p className="text-sm font-medium text-stone-800 mt-1">{detail.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <p className="text-xs text-stone-400 mt-4">
           أنشئ في {formatDateTime(order.created_at)}
         </p>
@@ -115,24 +161,62 @@ export default function FactoryOrderDetail() {
       <div className="bg-white rounded-2xl border border-stone-200/60 shadow-sm p-5">
         <div className="flex items-center gap-2 mb-3">
           <MessageSquare size={16} className="text-stone-400" />
-          <h2 className="font-bold text-stone-900 text-sm">ملاحظاتك</h2>
+          <h2 className="font-bold text-stone-900 text-sm">ملاحظات الطلب</h2>
         </div>
-        <textarea
-          value={notes}
-          onChange={e => setNotes(e.target.value)}
-          rows={4}
-          placeholder="أضف ملاحظاتك أو تحديثاتك هنا..."
-          className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-sm resize-none
-            focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
-        />
-        <button
-          onClick={updateNotes}
-          disabled={savingNotes}
-          className="mt-3 px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:bg-brand-300
-            text-white text-sm font-medium rounded-xl transition-all"
-        >
-          {savingNotes ? 'جاري الحفظ...' : 'حفظ الملاحظات'}
-        </button>
+        <p className="text-sm text-stone-600 whitespace-pre-wrap">{order.general_notes || 'لا توجد ملاحظات'}</p>
+      </div>
+
+      {/* Attachments */}
+      <div className="bg-white rounded-2xl border border-stone-200/60 shadow-sm p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <FileDown size={16} className="text-stone-400" />
+          <h2 className="font-bold text-stone-900 text-sm">الصور والمرفقات</h2>
+        </div>
+
+        {imageAttachments.length === 0 && otherAttachments.length === 0 ? (
+          <p className="text-sm text-stone-400">لا توجد مرفقات</p>
+        ) : (
+          <div className="space-y-4">
+            {imageAttachments.length > 0 && (
+              <div className="grid grid-cols-2 gap-3">
+                {imageAttachments.map(attachment => (
+                  <a
+                    key={attachment.id}
+                    href={attachment.file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group block rounded-2xl overflow-hidden border border-stone-200 bg-stone-50"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={attachment.file_url} alt={attachment.file_name} className="h-32 w-full object-cover group-hover:scale-[1.02] transition-transform" />
+                    <div className="p-2 flex items-center gap-2 text-xs text-stone-500">
+                      <ImageIcon size={13} />
+                      <span className="truncate">{attachment.file_name}</span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+
+            {otherAttachments.length > 0 && (
+              <div className="space-y-2">
+                {otherAttachments.map(attachment => (
+                  <a
+                    key={attachment.id}
+                    href={attachment.file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    download={attachment.file_name}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-700 hover:border-brand-200 hover:bg-brand-50/40"
+                  >
+                    <span className="truncate">{attachment.file_name}</span>
+                    <FileDown size={16} className="text-stone-400 flex-shrink-0" />
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -15,8 +15,7 @@ export async function POST(req: NextRequest) {
 
 معلومات الطلب الحالي:
 - رقم الطلب: ${orderContext.order_number}
-- العنوان: ${orderContext.title}
-- الوصف: ${orderContext.description || 'لا يوجد'}
+- نوع المنتج: ${orderContext.product_type || 'غير محدد'}
 - الحالة: ${orderContext.status}
 - المصنع: ${orderContext.factory}
 - الكمية: ${orderContext.quantity || 'غير محدد'}

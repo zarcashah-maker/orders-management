@@ -1,4 +1,4 @@
-import { Order, ProductType } from '@/types'
+import { Attachment, Order, OrderStatus, ProductType, ORDER_STATUS_LABELS } from '@/types'
 
 export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
   graduation_cap: 'قبعة تخرج',
@@ -68,6 +68,13 @@ export const PRODUCT_TYPE_OPTIONS = (Object.keys(PRODUCT_TYPE_LABELS) as Product
   label: PRODUCT_TYPE_LABELS[value],
 }))
 
+export const ORDER_STATUS_OPTIONS: { value: OrderStatus; label: string }[] = (
+  Object.keys(ORDER_STATUS_LABELS) as OrderStatus[]
+).map(value => ({
+  value,
+  label: ORDER_STATUS_LABELS[value],
+}))
+
 export function getProductTypeLabel(productType: ProductType | null | undefined, fallback?: string | null) {
   if (productType && PRODUCT_TYPE_LABELS[productType]) return PRODUCT_TYPE_LABELS[productType]
   return fallback || 'غير محدد'
@@ -78,9 +85,30 @@ export function getOrderThumbnail(order: Pick<Order, 'images' | 'attachments'>) 
   if (image) return image
 
   return order.attachments?.find(attachment =>
-    attachment.file_type?.startsWith('image/') ||
+    attachment.attachment_type?.startsWith('image/') ||
     /\.(png|jpe?g|webp|gif|svg)$/i.test(attachment.file_name)
   )?.file_url || null
+}
+
+export function isImageAttachment(attachment: Pick<Attachment, 'attachment_type' | 'file_name'>) {
+  return Boolean(
+    attachment.attachment_type?.startsWith('image/') ||
+    /\.(png|jpe?g|webp|gif|svg)$/i.test(attachment.file_name)
+  )
+}
+
+export function getDetailEntries(productType: ProductType | null | undefined, details: Record<string, unknown> | null | undefined) {
+  if (!details) return []
+  const fields = productType ? PRODUCT_DETAIL_FIELDS[productType] : []
+  const labels = new Map(fields.map(field => [field.key, field.label]))
+
+  return Object.entries(details)
+    .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '')
+    .map(([key, value]) => ({
+      key,
+      label: labels.get(key) || key.replace(/_/g, ' '),
+      value: String(value),
+    }))
 }
 
 export function getFactoryOrderType(productType: ProductType | null | undefined, fallback?: string | null) {

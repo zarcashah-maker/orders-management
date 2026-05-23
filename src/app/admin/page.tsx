@@ -6,7 +6,7 @@ import { Order, Factory as FactoryType } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { formatDate } from '@/lib/utils'
 import { getOrderThumbnail, getProductTypeLabel } from '@/lib/orders'
-import { Package, Clock, CheckCircle, Factory, TrendingUp, ArrowLeft } from 'lucide-react'
+import { Package, Clock, CheckCircle, Factory, TrendingUp, ArrowLeft, MessageSquare } from 'lucide-react'
 import Link from 'next/link'
 
 interface Stats {
@@ -19,23 +19,34 @@ interface Stats {
 
 export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([])
+  const [notedOrders, setNotedOrders] = useState<Order[]>([])
   const [stats, setStats] = useState<Stats>({ total: 0, pending: 0, in_progress: 0, completed: 0, factories: 0 })
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
   useEffect(() => {
     async function load() {
-      const [{ data: ordersData }, { data: factoriesData }] = await Promise.all([
+      const [{ data: ordersData }, { data: recentOrders }, { data: notesData }, { data: factoriesData }] = await Promise.all([
+        supabase
+          .from('orders')
+          .select('id, status'),
         supabase
           .from('orders')
           .select('*, factory:factories(name), images:order_images(*), attachments(*)')
           .order('created_at', { ascending: false })
           .limit(5),
+        supabase
+          .from('orders')
+          .select('*, factory:factories(name), images:order_images(*), attachments(*)')
+          .not('general_notes', 'is', null)
+          .order('updated_at', { ascending: false })
+          .limit(5),
         supabase.from('factories').select('id').eq('is_active', true),
       ])
 
       const all = ordersData || []
-      setOrders(all)
+      setOrders(recentOrders || [])
+      setNotedOrders((notesData || []).filter(order => order.general_notes?.trim()))
       setStats({
         total: all.length,
         pending: all.filter(o => o.status === 'pending').length,
@@ -94,6 +105,59 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* Orders with notes */}
+      <div className="bg-white rounded-2xl border border-stone-200/60 shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between p-5 border-b border-stone-100">
+          <div className="flex items-center gap-2">
+            <MessageSquare size={18} className="text-stone-400" />
+            <h2 className="font-bold text-stone-900">طلبات فيها ملاحظات أو تغييرات</h2>
+          </div>
+          <Link
+            href="/admin/orders"
+            className="flex items-center gap-1 text-sm text-brand-600 hover:text-brand-700 font-medium"
+          >
+            عرض الطلبات <ArrowLeft size={14} />
+          </Link>
+        </div>
+
+        {loading ? (
+          <div className="p-4 space-y-3">
+            {[...Array(2)].map((_, i) => (
+              <div key={i} className="h-14 skeleton rounded-xl" />
+            ))}
+          </div>
+        ) : notedOrders.length === 0 ? (
+          <div className="p-6 text-center text-stone-400 text-sm">لا توجد ملاحظات حالياً</div>
+        ) : (
+          <div className="divide-y divide-stone-50">
+            {notedOrders.map(order => (
+              <Link
+                key={order.id}
+                href={`/admin/orders/${order.id}`}
+                className="flex items-start gap-3 px-5 py-3.5 hover:bg-stone-50 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-xl overflow-hidden bg-stone-100 border border-stone-200 flex items-center justify-center flex-shrink-0">
+                  {getOrderThumbnail(order) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={getOrderThumbnail(order)!} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <Package size={16} className="text-stone-300" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-mono text-stone-400">{order.order_number}</span>
+                    <StatusBadge status={order.status} size="sm" />
+                  </div>
+                  <p className="text-sm font-medium text-stone-800 mt-1">{getProductTypeLabel(order.product_type)}</p>
+                  <p className="text-xs text-stone-500 mt-1 line-clamp-2">{order.general_notes}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Recent orders */}
       <div className="bg-white rounded-2xl border border-stone-200/60 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between p-5 border-b border-stone-100">
@@ -138,7 +202,7 @@ export default function AdminDashboard() {
                     <span className="text-xs font-mono text-stone-400">{order.order_number}</span>
                     <StatusBadge status={order.status} size="sm" />
                   </div>
-                  <p className="text-sm font-medium text-stone-800 truncate">{getProductTypeLabel(order.product_type, order.title)}</p>
+                  <p className="text-sm font-medium text-stone-800 truncate">{getProductTypeLabel(order.product_type)}</p>
                   <p className="text-xs text-stone-400">
                     {order.customer_phone || 'لا يوجد جوال'} · {(order.factory as unknown as FactoryType)?.name || 'غير مسند'}
                   </p>
