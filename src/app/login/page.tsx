@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { createClient } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 import { Eye, EyeOff, Package } from 'lucide-react'
+import Link from 'next/link'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -17,9 +18,28 @@ export default function LoginPage() {
   const supabase = createClient()
 
   useEffect(() => {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const urlProjectRef = supabaseUrl?.match(/^https:\/\/([^.]+)\.supabase\.co/)?.[1]
+    const keyProjectRef = getJwtPayload(anonKey)?.ref
+
+    console.info('[auth-debug] Supabase env check', {
+      hasUrl: Boolean(supabaseUrl),
+      hasAnonKey: Boolean(anonKey),
+      urlProjectRef,
+      keyProjectRef,
+      refsMatch: Boolean(urlProjectRef && keyProjectRef && urlProjectRef === keyProjectRef),
+    })
+
+    if (urlProjectRef && keyProjectRef && urlProjectRef !== keyProjectRef) {
+      console.warn('[auth-debug] NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY appear to belong to different Supabase projects.')
+    }
+  }, [])
+
+  useEffect(() => {
     if (user && profile) {
-      if (profile.role === 'admin') router.replace('/admin')
-      else if (profile.role === 'factory') router.replace('/factory')
+      if (profile.role === 'Admin') router.replace('/admin')
+      else if (profile.role === 'Factory') router.replace('/factory')
     }
   }, [user, profile, router])
 
@@ -40,10 +60,21 @@ export default function LoginPage() {
       })
   
       if (error) {
+        console.error('[auth-debug] signInWithPassword failed', {
+          name: error.name,
+          message: error.message,
+          status: error.status,
+          code: error.code,
+        })
         toast.error('بيانات الدخول غير صحيحة')
         setLoading(false)
         return
       }
+
+      console.info('[auth-debug] signInWithPassword succeeded', {
+        userId: data.user?.id,
+        email: data.user?.email,
+      })
   
       const userId = data.user?.id
   
@@ -54,24 +85,31 @@ export default function LoginPage() {
       }
   
       const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
+        .from('app_users')
         .select('role')
-        .eq('id', userId)
+        .eq('auth_user_id', userId)
         .single()
   
       if (profileError || !profileData) {
-        console.error('Profile error:', profileError)
+        console.error('[auth-debug] Profile lookup failed after successful sign-in', {
+          userId,
+          message: profileError?.message,
+          code: profileError?.code,
+          details: profileError?.details,
+          hint: profileError?.hint,
+          hasProfile: Boolean(profileData),
+        })
         toast.error('لم يتم العثور على صلاحية المستخدم')
         setLoading(false)
         return
       }
   
-      if (profileData.role === 'admin') {
+      if (profileData.role === 'Admin') {
         router.replace('/admin')
         return
       }
   
-      if (profileData.role === 'factory') {
+      if (profileData.role === 'Factory') {
         router.replace('/factory')
         return
       }
@@ -82,6 +120,18 @@ export default function LoginPage() {
       console.error('Login error:', err)
       toast.error('حدث خطأ أثناء تسجيل الدخول')
       setLoading(false)
+    }
+  }
+
+  function getJwtPayload(token: string | undefined) {
+    if (!token) return null
+    try {
+      const [, payload] = token.split('.')
+      if (!payload) return null
+      return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
+    } catch (err) {
+      console.warn('[auth-debug] Could not decode Supabase anon key payload', err)
+      return null
     }
   }
 
@@ -190,6 +240,15 @@ export default function LoginPage() {
                 'دخول'
               )}
             </button>
+
+            <div className="text-center">
+              <Link
+                href="/forgot-password"
+                className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors"
+              >
+                نسيت كلمة المرور؟
+              </Link>
+            </div>
           </form>
         </div>
 

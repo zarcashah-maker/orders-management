@@ -10,7 +10,7 @@ export default function FactoryLayout({ children }: { children: React.ReactNode 
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading && (!user || profile?.role !== 'factory')) {
+    if (!loading && (!user || profile?.role !== 'Factory')) {
       router.replace('/login')
     }
   }, [user, profile, loading, router])
@@ -23,7 +23,7 @@ export default function FactoryLayout({ children }: { children: React.ReactNode 
     )
   }
 
-  if (!user || profile?.role !== 'factory') return null
+  if (!user || profile?.role !== 'Factory') return null
 
   return (
     <div className="min-h-screen bg-stone-50" dir="rtl">

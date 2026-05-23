@@ -26,7 +26,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname()
 
   useEffect(() => {
-    if (!loading && (!user || profile?.role !== 'admin')) {
+    if (!loading && (!user || profile?.role !== 'Admin')) {
       router.replace('/login')
     }
   }, [user, profile, loading, router])
@@ -39,7 +39,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     )
   }
 
-  if (!user || profile?.role !== 'admin') return null
+  if (!user || profile?.role !== 'Admin') return null
 
   return (
     <div className="min-h-screen bg-stone-50" dir="rtl">

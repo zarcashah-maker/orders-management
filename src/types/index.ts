@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'factory'
+export type UserRole = 'Admin' | 'Factory'
 
 export type OrderStatus =
   | 'pending'
@@ -7,22 +7,32 @@ export type OrderStatus =
   | 'completed'
   | 'cancelled'
 
+export type ProductType =
+  | 'graduation_cap'
+  | 'graduation_sash'
+  | 'graduation_gown'
+  | 'graduation_jacket'
+  | 'hoodie'
+  | 'tshirt'
+  | 'other'
+
 export interface Profile {
   id: string
+  name: string
   email: string
-  full_name: string | null
+  password: string | null
   role: UserRole
   factory_id: string | null
+  auth_user_id: string | null
   created_at: string
 }
 
 export interface Factory {
   id: string
   name: string
-  slug: string
-  description: string | null
-  contact_email: string | null
-  contact_phone: string | null
+  contact_person: string | null
+  phone: string | null
+  email: string | null
   is_active: boolean
   created_at: string
 }
@@ -30,19 +40,23 @@ export interface Factory {
 export interface Order {
   id: string
   order_number: string
-  title: string
-  description: string | null
+  customer_name: string | null
+  customer_phone: string | null
+  product_type: ProductType | null
+  details: Record<string, unknown> | null
   status: OrderStatus
-  factory_id: string
-  created_by: string
+  assigned_factory_id: string | null
+  created_by: string | null
+  order_date: string | null
   due_date: string | null
   quantity: number | null
-  notes: string | null
-  ai_summary: string | null
+  general_notes: string | null
+  archived: boolean
   created_at: string
   updated_at: string
   factory?: Factory
   images?: OrderImage[]
+  attachments?: Attachment[]
   creator?: Profile
 }
 
@@ -51,6 +65,36 @@ export interface OrderImage {
   order_id: string
   url: string
   caption: string | null
+  created_at: string
+}
+
+export interface Attachment {
+  id: string
+  order_id: string
+  file_url: string
+  file_name: string
+  attachment_type: string
+  storage_path: string | null
+  notes: string | null
+  created_at: string
+}
+
+export interface Comment {
+  id: string
+  order_id: string
+  user_id: string | null
+  comment_text: string
+  is_internal: boolean
+  created_at: string
+}
+
+export interface StatusHistory {
+  id: string
+  order_id: string
+  old_status: OrderStatus | null
+  new_status: OrderStatus
+  changed_by: string | null
+  notes: string | null
   created_at: string
 }
 
