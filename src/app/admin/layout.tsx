@@ -13,17 +13,18 @@ import {
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-
-const navItems = [
-  { href: '/admin', label: 'الرئيسية', icon: LayoutDashboard, exact: true },
-  { href: '/admin/orders', label: 'الطلبات', icon: Package, exact: false },
-  { href: '/admin/factories', label: 'المصانع', icon: Factory, exact: false },
-]
+import { usePreferences } from '@/lib/i18n'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
+  const { dir, t } = usePreferences()
+  const navItems = [
+    { href: '/admin', label: t('home'), icon: LayoutDashboard, exact: true },
+    { href: '/admin/orders', label: t('orders'), icon: Package, exact: false },
+    { href: '/admin/factories', label: t('factories'), icon: Factory, exact: false },
+  ]
 
   useEffect(() => {
     if (!loading && (!user || profile?.role !== 'Admin')) {
@@ -42,12 +43,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (!user || profile?.role !== 'Admin') return null
 
   return (
-    <div className="min-h-screen bg-stone-50" dir="rtl">
-      <Navbar title="لوحة الإدارة" />
+    <div className="min-h-screen bg-stone-50" dir={dir}>
+      <Navbar title={t('adminDashboard')} />
 
       <div className="flex">
         {/* Sidebar */}
-        <aside className="w-56 min-h-[calc(100vh-56px)] bg-white border-l border-stone-200 fixed top-14 right-0 hidden md:block">
+        <aside className="w-56 min-h-[calc(100vh-56px)] bg-white border-l border-stone-200 fixed top-14 rtl:right-0 ltr:left-0 hidden md:block">
           <nav className="p-3 space-y-1">
             {navItems.map(item => {
               const isActive = item.exact
@@ -66,7 +67,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 >
                   <item.icon size={18} />
                   <span>{item.label}</span>
-                  {!isActive && <ChevronLeft size={14} className="mr-auto opacity-40" />}
+                  {!isActive && <ChevronLeft size={14} className="ms-auto opacity-40" />}
                 </Link>
               )
             })}
@@ -74,7 +75,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </aside>
 
         {/* Main content */}
-        <main className="flex-1 md:mr-56 p-4 sm:p-6">
+        <main className="flex-1 md:rtl:mr-56 md:ltr:ml-56 p-4 sm:p-6">
           {/* Mobile nav */}
           <div className="md:hidden flex gap-2 mb-4 overflow-x-auto pb-1">
             {navItems.map(item => {

@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { Order, Factory, OrderStatus, AIChatMessage } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { formatDate, formatDateTime } from '@/lib/utils'
-import { getDetailEntries, getProductTypeLabel, isImageAttachment } from '@/lib/orders'
+import { getDetailEntries, getOrderStatusOptions, getProductTypeLabel, isImageAttachment } from '@/lib/orders'
 import {
   ArrowRight, Sparkles, Send, ChevronDown,
   Package, Calendar, Hash, Building2, FileDown, Image as ImageIcon, Phone
@@ -14,14 +14,7 @@ import {
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
-
-const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
-  { value: 'pending', label: 'قيد الانتظار' },
-  { value: 'in_progress', label: 'جاري التنفيذ' },
-  { value: 'review', label: 'تحت المراجعة' },
-  { value: 'completed', label: 'مكتمل' },
-  { value: 'cancelled', label: 'ملغي' },
-]
+import { usePreferences } from '@/lib/i18n'
 
 export default function OrderDetailPage() {
   const { id } = useParams()
@@ -33,7 +26,9 @@ export default function OrderDetailPage() {
   const [aiLoading, setAiLoading] = useState(false)
   const chatRef = useRef<HTMLDivElement>(null)
   const { profile } = useAuth()
+  const { locale, t } = usePreferences()
   const supabase = createClient()
+  const statusOptions = getOrderStatusOptions(locale)
 
   useEffect(() => {
     async function load() {
@@ -134,7 +129,7 @@ export default function OrderDetailPage() {
   }
 
   const factory = order.factory as unknown as Factory
-  const detailEntries = getDetailEntries(order.product_type, order.details)
+  const detailEntries = getDetailEntries(order.product_type, order.details, locale)
   const imageAttachments = (order.attachments || []).filter(isImageAttachment)
   const otherAttachments = (order.attachments || []).filter(attachment => !isImageAttachment(attachment))
 
@@ -143,7 +138,7 @@ export default function OrderDetailPage() {
       {/* Back */}
       <Link href="/admin/orders" className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 transition-colors">
         <ArrowRight size={16} />
-        العودة للطلبات
+        {t('orders')}
       </Link>
 
       {/* Header card */}
@@ -156,12 +151,12 @@ export default function OrderDetailPage() {
               </span>
               <StatusBadge status={order.status} />
             </div>
-            <h1 className="text-xl font-display font-bold text-stone-900">{getProductTypeLabel(order.product_type)}</h1>
+            <h1 className="text-xl font-display font-bold text-stone-900">{getProductTypeLabel(order.product_type, null, locale)}</h1>
           </div>
 
           {/* Status changer */}
           <div className="relative">
-            <label className="block text-xs text-stone-400 mb-1">تغيير الحالة</label>
+            <label className="block text-xs text-stone-400 mb-1">{t('status')}</label>
             <div className="relative">
               <select
                 value={order.status}
@@ -171,7 +166,7 @@ export default function OrderDetailPage() {
                   focus:outline-none focus:ring-2 focus:ring-brand-400 appearance-none cursor-pointer
                   disabled:opacity-50"
               >
-                {STATUS_OPTIONS.map(o => (
+                {statusOptions.map(o => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
@@ -181,47 +176,60 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Meta */}
+        {order.status === 'rework' && (
+          <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-xl text-sm font-medium text-orange-800">
+            {t('returnedNotice')}
+          </div>
+        )}
+
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 pt-5 border-t border-stone-100">
           <div className="flex items-center gap-2">
             <Building2 size={15} className="text-stone-400" />
             <div>
-              <p className="text-xs text-stone-400">المصنع</p>
+              <p className="text-xs text-stone-400">{t('factory')}</p>
               <p className="text-sm font-medium text-stone-700">{factory?.name || '—'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Hash size={15} className="text-stone-400" />
             <div>
-              <p className="text-xs text-stone-400">الكمية</p>
+              <p className="text-xs text-stone-400">{t('quantity')}</p>
               <p className="text-sm font-medium text-stone-700">{order.quantity || '—'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Calendar size={15} className="text-stone-400" />
             <div>
-              <p className="text-xs text-stone-400">تاريخ التسليم</p>
+              <p className="text-xs text-stone-400">{t('dueDate')}</p>
               <p className="text-sm font-medium text-stone-700">{formatDate(order.due_date)}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Package size={15} className="text-stone-400" />
             <div>
-              <p className="text-xs text-stone-400">تاريخ الإنشاء</p>
+              <p className="text-xs text-stone-400">{t('createdAt')}</p>
               <p className="text-sm font-medium text-stone-700">{formatDateTime(order.created_at)}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Phone size={15} className="text-stone-400" />
             <div>
-              <p className="text-xs text-stone-400">جوال العميل</p>
+              <p className="text-xs text-stone-400">{t('customerPhone')}</p>
               <p className="text-sm font-medium text-stone-700" dir="ltr">{order.customer_phone || '—'}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Hash size={15} className="text-stone-400" />
+            <div>
+              <p className="text-xs text-stone-400">{t('sallaOrderNumber')}</p>
+              <p className="text-sm font-medium text-stone-700" dir="ltr">{order.salla_order_number || '—'}</p>
             </div>
           </div>
         </div>
 
         {detailEntries.length > 0 && (
           <div className="mt-5 pt-5 border-t border-stone-100">
-            <p className="text-sm font-bold text-stone-900 mb-3">تفاصيل المنتج</p>
+            <p className="text-sm font-bold text-stone-900 mb-3">{t('details')}</p>
             <div className="grid sm:grid-cols-2 gap-3">
               {detailEntries.map(detail => (
                 <div key={detail.key} className="rounded-xl bg-stone-50 border border-stone-100 p-3">
@@ -235,7 +243,7 @@ export default function OrderDetailPage() {
 
         {order.general_notes && (
           <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-xl">
-            <p className="text-xs font-semibold text-amber-700 mb-1">ملاحظات</p>
+            <p className="text-xs font-semibold text-amber-700 mb-1">{t('notes')}</p>
             <p className="text-sm text-amber-900">{order.general_notes}</p>
           </div>
         )}
@@ -245,11 +253,11 @@ export default function OrderDetailPage() {
       <div className="bg-white rounded-2xl border border-stone-200/60 shadow-sm p-5">
         <div className="flex items-center gap-2 mb-4">
           <FileDown size={17} className="text-stone-400" />
-          <h2 className="font-bold text-stone-900">الصور والمرفقات</h2>
+          <h2 className="font-bold text-stone-900">{t('attachments')}</h2>
         </div>
 
         {imageAttachments.length === 0 && otherAttachments.length === 0 ? (
-          <p className="text-sm text-stone-400">لا توجد مرفقات لهذا الطلب</p>
+          <p className="text-sm text-stone-400">{t('noAttachments')}</p>
         ) : (
           <div className="space-y-4">
             {imageAttachments.length > 0 && (

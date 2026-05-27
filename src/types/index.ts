@@ -2,7 +2,9 @@ export type UserRole = 'Admin' | 'Factory'
 
 export type OrderStatus =
   | 'pending'
+  | 'sewing'
   | 'in_progress'
+  | 'rework'
   | 'review'
   | 'completed'
   | 'cancelled'
@@ -40,6 +42,7 @@ export interface Factory {
 export interface Order {
   id: string
   order_number: string
+  salla_order_number: string | null
   customer_name: string | null
   customer_phone: string | null
   product_type: ProductType | null
@@ -105,7 +108,9 @@ export interface AIChatMessage {
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   pending: 'قيد الانتظار',
+  sewing: 'الخياطة',
   in_progress: 'جاري التنفيذ',
+  rework: 'مرتجع / إعادة عمل',
   review: 'تحت المراجعة',
   completed: 'مكتمل',
   cancelled: 'ملغي',
@@ -113,7 +118,9 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 
 export const ORDER_STATUS_COLORS: Record<OrderStatus, string> = {
   pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  sewing: 'bg-cyan-100 text-cyan-800 border-cyan-200',
   in_progress: 'bg-blue-100 text-blue-800 border-blue-200',
+  rework: 'bg-orange-100 text-orange-800 border-orange-200',
   review: 'bg-purple-100 text-purple-800 border-purple-200',
   completed: 'bg-green-100 text-green-800 border-green-200',
   cancelled: 'bg-red-100 text-red-800 border-red-200',

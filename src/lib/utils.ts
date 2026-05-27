@@ -29,6 +29,7 @@ export function generateOrderNumber(): string {
   const now = new Date()
   const year = now.getFullYear().toString().slice(-2)
   const month = String(now.getMonth() + 1).padStart(2, '0')
-  const random = Math.floor(Math.random() * 9000) + 1000
-  return `T-${year}${month}-${random}`
+  const day = String(now.getDate()).padStart(2, '0')
+  const random = Math.floor(Math.random() * 90000) + 10000
+  return `ORD-${year}${month}${day}-${random}`
 }

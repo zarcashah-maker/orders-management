@@ -4,18 +4,20 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import toast from 'react-hot-toast'
-import { ArrowRight, Mail, Package } from 'lucide-react'
+import { ArrowRight, Mail, Moon, Package, Sun } from 'lucide-react'
+import { usePreferences } from '@/lib/i18n'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const supabase = createClient()
+  const { locale, setLocale, theme, toggleTheme, t, dir } = usePreferences()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
     if (!email.trim()) {
-      toast.error('يرجى إدخال البريد الإلكتروني')
+      toast.error(locale === 'ar' ? 'يرجى إدخال البريد الإلكتروني' : 'Please enter your email')
       return
     }
 
@@ -29,29 +31,46 @@ export default function ForgotPasswordPage() {
 
     if (error) {
       console.error('Reset password email error:', error)
-      toast.error('حدث خطأ، يرجى المحاولة مرة أخرى')
+      toast.error(locale === 'ar' ? 'حدث خطأ، يرجى المحاولة مرة أخرى' : 'Something went wrong, please try again')
       return
     }
 
-    toast.success('تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني')
+    toast.success(locale === 'ar' ? 'تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني' : 'Password recovery link has been sent to your email')
   }
 
   return (
-    <div className="min-h-screen bg-stone-100 flex items-center justify-center p-4" dir="rtl">
+    <div className="min-h-screen bg-stone-100 flex items-center justify-center p-4" dir={dir}>
       <div className="relative w-full max-w-sm">
+        <div className="mb-5 flex justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => setLocale(locale === 'ar' ? 'en' : 'ar')}
+            className="px-3 py-1.5 text-xs font-semibold rounded-full bg-white border border-stone-200 text-stone-600 hover:bg-stone-50 transition-colors"
+          >
+            {t('language')}
+          </button>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="w-8 h-8 rounded-full bg-white border border-stone-200 text-stone-600 hover:bg-stone-50 inline-flex items-center justify-center transition-colors"
+            title={theme === 'dark' ? t('light') : t('dark')}
+          >
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+        </div>
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-500 rounded-2xl mb-4 shadow-lg shadow-brand-500/30">
             <Package size={32} className="text-white" />
           </div>
-          <h1 className="text-2xl font-display font-bold text-stone-900">استعادة كلمة المرور</h1>
-          <p className="text-stone-500 text-sm mt-1">أدخل بريدك لإرسال رابط التحديث</p>
+          <h1 className="text-2xl font-display font-bold text-stone-900">{locale === 'ar' ? 'استعادة كلمة المرور' : 'Recover Password'}</h1>
+          <p className="text-stone-500 text-sm mt-1">{locale === 'ar' ? 'أدخل بريدك لإرسال رابط التحديث' : 'Enter your email to receive the reset link'}</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl shadow-stone-200/80 p-8 border border-stone-200/60">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-stone-700 mb-1.5">
-                البريد الإلكتروني
+                {t('email')}
               </label>
               <div className="relative">
                 <input
@@ -77,7 +96,7 @@ export default function ForgotPasswordPage() {
                 shadow-md shadow-brand-500/25 hover:shadow-lg hover:shadow-brand-500/30
                 disabled:cursor-not-allowed"
             >
-              {loading ? 'جاري الإرسال...' : 'إرسال رابط الاستعادة'}
+              {loading ? (locale === 'ar' ? 'جاري الإرسال...' : 'Sending...') : (locale === 'ar' ? 'إرسال رابط الاستعادة' : 'Send Recovery Link')}
             </button>
           </form>
         </div>
@@ -87,7 +106,7 @@ export default function ForgotPasswordPage() {
           className="mt-5 inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 transition-colors"
         >
           <ArrowRight size={16} />
-          العودة لتسجيل الدخول
+          {locale === 'ar' ? 'العودة لتسجيل الدخول' : 'Back to login'}
         </Link>
       </div>
     </div>

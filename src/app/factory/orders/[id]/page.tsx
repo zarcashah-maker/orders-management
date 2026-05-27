@@ -7,12 +7,13 @@ import { Order, OrderStatus } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { formatDate, formatDateTime } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
-import { getDetailEntries, getFactoryOrderType, isImageAttachment, ORDER_STATUS_OPTIONS } from '@/lib/orders'
+import { getDetailEntries, getFactoryOrderType, getOrderStatusOptions, isImageAttachment } from '@/lib/orders'
 import {
   ArrowRight, Package, Calendar, Hash, MessageSquare, FileDown, ChevronDown, Image as ImageIcon
 } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
+import { usePreferences } from '@/lib/i18n'
 
 export default function FactoryOrderDetail() {
   const { id } = useParams()
@@ -20,7 +21,9 @@ export default function FactoryOrderDetail() {
   const [loading, setLoading] = useState(true)
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const { profile } = useAuth()
+  const { locale, t } = usePreferences()
   const supabase = createClient()
+  const statusOptions = getOrderStatusOptions(locale)
 
   useEffect(() => {
     async function load() {
@@ -48,7 +51,7 @@ export default function FactoryOrderDetail() {
       .eq('assigned_factory_id', profile?.factory_id || '')
 
     if (error) {
-      toast.error('فشل تحديث الحالة')
+      toast.error(locale === 'ar' ? 'فشل تحديث الحالة' : 'Could not update status')
     } else {
       await supabase.from('order_status_history').insert({
         id: crypto.randomUUID(),
@@ -58,7 +61,7 @@ export default function FactoryOrderDetail() {
         changed_by: profile?.id || null,
       })
       setOrder({ ...order, status: newStatus })
-      toast.success('تم تحديث الحالة')
+      toast.success(locale === 'ar' ? 'تم تحديث الحالة' : 'Status updated')
     }
     setUpdatingStatus(false)
   }
@@ -72,12 +75,12 @@ export default function FactoryOrderDetail() {
 
   if (!order) return (
     <div className="text-center py-20">
-      <p className="text-stone-400">الطلب غير موجود</p>
-      <Link href="/factory" className="text-brand-600 text-sm mt-2 inline-block">العودة</Link>
+      <p className="text-stone-400">{locale === 'ar' ? 'الطلب غير موجود' : 'Order not found'}</p>
+      <Link href="/factory" className="text-brand-600 text-sm mt-2 inline-block">{locale === 'ar' ? 'العودة' : 'Back'}</Link>
     </div>
   )
 
-  const detailEntries = getDetailEntries(order.product_type, order.details)
+  const detailEntries = getDetailEntries(order.product_type, order.details, locale)
   const imageAttachments = (order.attachments || []).filter(isImageAttachment)
   const otherAttachments = (order.attachments || []).filter(attachment => !isImageAttachment(attachment))
 
@@ -85,7 +88,7 @@ export default function FactoryOrderDetail() {
     <div className="space-y-5 animate-fade-in">
       <Link href="/factory" className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 transition-colors">
         <ArrowRight size={16} />
-        العودة
+        {locale === 'ar' ? 'العودة' : 'Back'}
       </Link>
 
       {/* Order card */}
@@ -99,29 +102,35 @@ export default function FactoryOrderDetail() {
               <span className="font-mono text-xs text-stone-400">{order.order_number}</span>
               <StatusBadge status={order.status as OrderStatus} />
             </div>
-            <h1 className="font-bold text-stone-900">{getFactoryOrderType(order.product_type)}</h1>
+            <h1 className="font-bold text-stone-900">{getFactoryOrderType(order.product_type, undefined, locale)}</h1>
           </div>
         </div>
+
+        {order.status === 'rework' && (
+          <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-xl text-sm font-medium text-orange-800">
+            {t('returnedNotice')}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4 pt-4 border-t border-stone-100">
           <div className="flex items-center gap-2">
             <Hash size={14} className="text-stone-400" />
             <div>
-              <p className="text-xs text-stone-400">الكمية</p>
+              <p className="text-xs text-stone-400">{t('quantity')}</p>
               <p className="text-sm font-medium">{order.quantity || '—'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Calendar size={14} className="text-stone-400" />
             <div>
-              <p className="text-xs text-stone-400">تاريخ التسليم</p>
+              <p className="text-xs text-stone-400">{t('dueDate')}</p>
               <p className="text-sm font-medium">{formatDate(order.due_date)}</p>
             </div>
           </div>
         </div>
 
         <div className="mt-4 pt-4 border-t border-stone-100">
-          <label className="block text-xs text-stone-400 mb-1">تحديث الحالة</label>
+          <label className="block text-xs text-stone-400 mb-1">{t('status')}</label>
           <div className="relative inline-block">
             <select
               value={order.status}
@@ -130,7 +139,7 @@ export default function FactoryOrderDetail() {
               className="px-3 py-2 pl-7 bg-stone-50 border border-stone-200 rounded-xl text-sm
                 focus:outline-none focus:ring-2 focus:ring-brand-400 appearance-none cursor-pointer disabled:opacity-50"
             >
-              {ORDER_STATUS_OPTIONS.map(option => (
+              {statusOptions.map(option => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
@@ -140,7 +149,7 @@ export default function FactoryOrderDetail() {
 
         {detailEntries.length > 0 && (
           <div className="mt-4 pt-4 border-t border-stone-100">
-            <p className="text-sm font-bold text-stone-900 mb-3">تفاصيل المنتج</p>
+            <p className="text-sm font-bold text-stone-900 mb-3">{t('details')}</p>
             <div className="grid sm:grid-cols-2 gap-3">
               {detailEntries.map(detail => (
                 <div key={detail.key} className="rounded-xl bg-stone-50 border border-stone-100 p-3">
@@ -153,7 +162,7 @@ export default function FactoryOrderDetail() {
         )}
 
         <p className="text-xs text-stone-400 mt-4">
-          أنشئ في {formatDateTime(order.created_at)}
+          {t('createdAt')}: {formatDateTime(order.created_at)}
         </p>
       </div>
 
@@ -161,20 +170,20 @@ export default function FactoryOrderDetail() {
       <div className="bg-white rounded-2xl border border-stone-200/60 shadow-sm p-5">
         <div className="flex items-center gap-2 mb-3">
           <MessageSquare size={16} className="text-stone-400" />
-          <h2 className="font-bold text-stone-900 text-sm">ملاحظات الطلب</h2>
+          <h2 className="font-bold text-stone-900 text-sm">{t('notes')}</h2>
         </div>
-        <p className="text-sm text-stone-600 whitespace-pre-wrap">{order.general_notes || 'لا توجد ملاحظات'}</p>
+        <p className="text-sm text-stone-600 whitespace-pre-wrap">{order.general_notes || (locale === 'ar' ? 'لا توجد ملاحظات' : 'No notes')}</p>
       </div>
 
       {/* Attachments */}
       <div className="bg-white rounded-2xl border border-stone-200/60 shadow-sm p-5">
         <div className="flex items-center gap-2 mb-4">
           <FileDown size={16} className="text-stone-400" />
-          <h2 className="font-bold text-stone-900 text-sm">الصور والمرفقات</h2>
+          <h2 className="font-bold text-stone-900 text-sm">{t('attachments')}</h2>
         </div>
 
         {imageAttachments.length === 0 && otherAttachments.length === 0 ? (
-          <p className="text-sm text-stone-400">لا توجد مرفقات</p>
+          <p className="text-sm text-stone-400">{t('noAttachments')}</p>
         ) : (
           <div className="space-y-4">
             {imageAttachments.length > 0 && (
