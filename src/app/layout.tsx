@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { AuthProvider } from '@/hooks/useAuth'
+import { PreferencesProvider } from '@/lib/i18n'
 import { Toaster } from 'react-hot-toast'
 
 export const metadata: Metadata = {
@@ -16,24 +17,26 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl">
       <body>
-        <AuthProvider>
-          {children}
-          <Toaster
-            position="top-center"
-            toastOptions={{
-              style: {
-                fontFamily: 'Cairo, sans-serif',
-                direction: 'rtl',
-                borderRadius: '10px',
-                background: '#1a1a1a',
-                color: '#fff',
-              },
-              success: {
-                iconTheme: { primary: '#f96d0a', secondary: '#fff' },
-              },
-            }}
-          />
-        </AuthProvider>
+        <PreferencesProvider>
+          <AuthProvider>
+            {children}
+            <Toaster
+              position="top-center"
+              toastOptions={{
+                style: {
+                  fontFamily: 'Cairo, sans-serif',
+                  direction: 'rtl',
+                  borderRadius: '10px',
+                  background: '#1a1a1a',
+                  color: '#fff',
+                },
+                success: {
+                  iconTheme: { primary: '#f96d0a', secondary: '#fff' },
+                },
+              }}
+            />
+          </AuthProvider>
+        </PreferencesProvider>
       </body>
     </html>
   )

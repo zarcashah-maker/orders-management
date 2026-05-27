@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Order, Factory, OrderStatus } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
@@ -8,15 +8,14 @@ import { formatDate } from '@/lib/utils'
 import {
   getOrderThumbnail,
   getProductTypeLabel,
-  ORDER_STATUS_OPTIONS,
-  PRODUCT_TYPE_OPTIONS,
+  getOrderStatusOptions,
+  getProductTypeOptions,
 } from '@/lib/orders'
-import { Plus, Search, Filter, Package, LayoutGrid, List } from 'lucide-react'
+import { Plus, Search, Filter, Package, LayoutGrid, List, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { NewOrderModal } from '@/components/admin/NewOrderModal'
-
-const STATUS_FILTER_OPTIONS = [{ value: '', label: 'جميع الحالات' }, ...ORDER_STATUS_OPTIONS]
-const PRODUCT_FILTER_OPTIONS = [{ value: '', label: 'جميع المنتجات' }, ...PRODUCT_TYPE_OPTIONS]
+import { usePreferences } from '@/lib/i18n'
+import toast from 'react-hot-toast'
 
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
@@ -28,7 +27,12 @@ export default function AdminOrdersPage() {
   const [productFilter, setProductFilter] = useState('')
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list')
   const [showNewOrder, setShowNewOrder] = useState(false)
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
+  const { locale, t } = usePreferences()
+  const statusOptions = getOrderStatusOptions(locale)
+  const productOptions = getProductTypeOptions(locale)
+  const STATUS_FILTER_OPTIONS = [{ value: '', label: t('allStatuses') }, ...statusOptions]
+  const PRODUCT_FILTER_OPTIONS = [{ value: '', label: t('allProducts') }, ...productOptions]
 
   const loadOrders = useCallback(async () => {
     let query = supabase
@@ -59,10 +63,23 @@ export default function AdminOrdersPage() {
   const filtered = orders.filter(o =>
     search === '' ||
     o.order_number.toLowerCase().includes(search.toLowerCase()) ||
+    (o.salla_order_number || '').toLowerCase().includes(search.toLowerCase()) ||
     (o.customer_phone || '').toLowerCase().includes(search.toLowerCase())
   )
 
-  const kanbanStatuses = ORDER_STATUS_OPTIONS.map(option => option.value)
+  const kanbanStatuses = statusOptions.map(option => option.value)
+
+  async function deleteOrder(order: Order) {
+    if (!window.confirm(t('confirmDeleteOrder'))) return
+    const { error } = await supabase.from('orders').delete().eq('id', order.id)
+    if (error) {
+      console.error('Delete order error:', error)
+      toast.error(t('deleteFailed'))
+      return
+    }
+    setOrders(current => current.filter(item => item.id !== order.id))
+    toast.success(t('deletedOrder'))
+  }
 
   function OrderSummary({ order }: { order: Order }) {
     return (
@@ -80,7 +97,7 @@ export default function AdminOrdersPage() {
             href={`/admin/orders/${order.id}`}
             className="text-sm font-medium text-stone-800 hover:text-brand-600 transition-colors"
           >
-            {getProductTypeLabel(order.product_type)}
+            {getProductTypeLabel(order.product_type, null, locale)}
           </Link>
           <p className="text-xs text-stone-400 mt-0.5 font-mono">{order.order_number}</p>
         </div>
@@ -93,8 +110,8 @@ export default function AdminOrdersPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-display font-bold text-stone-900">الطلبات</h1>
-          <p className="text-stone-500 text-sm mt-0.5">إجمالي {orders.length} طلب</p>
+          <h1 className="text-2xl font-display font-bold text-stone-900">{t('orders')}</h1>
+          <p className="text-stone-500 text-sm mt-0.5">{t('totalOrders')}: {orders.length}</p>
         </div>
         <button
           onClick={() => setShowNewOrder(true)}
@@ -103,7 +120,7 @@ export default function AdminOrdersPage() {
             shadow-md shadow-brand-500/25 hover:shadow-lg hover:shadow-brand-500/30 hover:-translate-y-0.5"
         >
           <Plus size={18} />
-          <span className="hidden sm:block">طلب جديد</span>
+          <span className="hidden sm:block">{t('newOrder')}</span>
         </button>
       </div>
 
@@ -113,7 +130,7 @@ export default function AdminOrdersPage() {
           <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400" />
           <input
             type="text"
-            placeholder="بحث برقم سلة أو الجوال..."
+            placeholder={locale === 'ar' ? 'بحث برقم داخلي أو سلة أو الجوال...' : 'Search internal, Salla, or phone...'}
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="w-full pr-9 pl-4 py-2.5 bg-white border border-stone-200 rounded-xl text-sm
@@ -149,7 +166,7 @@ export default function AdminOrdersPage() {
           className="px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-sm
             focus:outline-none focus:ring-2 focus:ring-brand-400 appearance-none cursor-pointer"
         >
-          <option value="">جميع المصانع</option>
+          <option value="">{t('allFactories')}</option>
           {factories.map(f => (
             <option key={f.id} value={f.id}>{f.name}</option>
           ))}
@@ -159,7 +176,7 @@ export default function AdminOrdersPage() {
             type="button"
             onClick={() => setViewMode('list')}
             className={`w-10 h-10 flex items-center justify-center ${viewMode === 'list' ? 'bg-brand-500 text-white' : 'text-stone-500 hover:bg-stone-50'}`}
-            title="عرض القائمة"
+            title={t('listView')}
           >
             <List size={17} />
           </button>
@@ -167,7 +184,7 @@ export default function AdminOrdersPage() {
             type="button"
             onClick={() => setViewMode('kanban')}
             className={`w-10 h-10 flex items-center justify-center ${viewMode === 'kanban' ? 'bg-brand-500 text-white' : 'text-stone-500 hover:bg-stone-50'}`}
-            title="عرض كانبان"
+            title={t('kanbanView')}
           >
             <LayoutGrid size={17} />
           </button>
@@ -183,12 +200,11 @@ export default function AdminOrdersPage() {
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center text-stone-400">
             <Package size={36} className="mx-auto mb-3 opacity-30" />
-            <p className="font-medium">لا توجد طلبات</p>
-            <p className="text-sm mt-1">أضف طلباً جديداً أو غيّر الفلاتر</p>
+            <p className="font-medium">{t('noOrders')}</p>
           </div>
         ) : viewMode === 'kanban' ? (
           <div className="p-4 overflow-x-auto">
-            <div className="grid min-w-[900px] grid-cols-5 gap-3">
+            <div className="grid min-w-[1120px] grid-cols-7 gap-3">
               {kanbanStatuses.map(status => {
                 const statusOrders = filtered.filter(order => order.status === status)
                 return (
@@ -214,11 +230,11 @@ export default function AdminOrdersPage() {
                               )}
                             </div>
                             <div className="min-w-0">
-                              <p className="text-sm font-medium text-stone-800 truncate">{getProductTypeLabel(order.product_type)}</p>
+                              <p className="text-sm font-medium text-stone-800 truncate">{getProductTypeLabel(order.product_type, null, locale)}</p>
                               <p className="text-xs font-mono text-stone-400">{order.order_number}</p>
                             </div>
                           </div>
-                          <p className="text-xs text-stone-400 mt-2">{(order.factory as unknown as Factory)?.name || 'غير مسند'}</p>
+                          <p className="text-xs text-stone-400 mt-2">{(order.factory as unknown as Factory)?.name || (locale === 'ar' ? 'غير مسند' : 'Unassigned')}</p>
                         </Link>
                       ))}
                     </div>
@@ -232,12 +248,14 @@ export default function AdminOrdersPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-stone-50 border-b border-stone-100">
-                  <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">رقم الطلب</th>
-                  <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">الطلب</th>
-                  <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">الجوال</th>
-                  <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">المصنع</th>
-                  <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">الحالة</th>
-                  <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">تاريخ الإنشاء</th>
+                  <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{t('internalOrderNumber')}</th>
+                  <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{t('sallaOrderNumber')}</th>
+                  <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{t('productType')}</th>
+                  <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{t('customerPhone')}</th>
+                  <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{t('factory')}</th>
+                  <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{t('status')}</th>
+                  <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{t('createdAt')}</th>
+                  <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{t('delete')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-50">
@@ -247,6 +265,9 @@ export default function AdminOrdersPage() {
                       <span className="font-mono text-xs text-stone-500 bg-stone-100 px-2 py-1 rounded-lg">
                         {order.order_number}
                       </span>
+                    </td>
+                    <td className="px-5 py-4 text-sm text-stone-600 font-mono">
+                      {order.salla_order_number || '—'}
                     </td>
                     <td className="px-5 py-4">
                       <OrderSummary order={order} />
@@ -262,6 +283,16 @@ export default function AdminOrdersPage() {
                     </td>
                     <td className="px-5 py-4 text-sm text-stone-400">
                       {formatDate(order.created_at)}
+                    </td>
+                    <td className="px-5 py-4">
+                      <button
+                        type="button"
+                        onClick={() => deleteOrder(order)}
+                        className="w-8 h-8 rounded-lg text-red-500 hover:bg-red-50 inline-flex items-center justify-center"
+                        title={t('delete')}
+                      >
+                        <Trash2 size={15} />
+                      </button>
                     </td>
                   </tr>
                 ))}

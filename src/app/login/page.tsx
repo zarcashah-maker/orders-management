@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { createClient } from '@/lib/supabase'
 import toast from 'react-hot-toast'
-import { Eye, EyeOff, Package } from 'lucide-react'
+import { Eye, EyeOff, Moon, Package, Sun } from 'lucide-react'
 import Link from 'next/link'
+import { usePreferences } from '@/lib/i18n'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -14,6 +15,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const { user, profile } = useAuth()
+  const { locale, setLocale, theme, toggleTheme, t, dir } = usePreferences()
   const router = useRouter()
   const supabase = createClient()
 
@@ -47,7 +49,7 @@ export default function LoginPage() {
     e.preventDefault()
   
     if (!email || !password) {
-      toast.error('يرجى إدخال البريد الإلكتروني وكلمة المرور')
+      toast.error(locale === 'ar' ? 'يرجى إدخال البريد الإلكتروني وكلمة المرور' : 'Please enter email and password')
       return
     }
   
@@ -66,7 +68,7 @@ export default function LoginPage() {
           status: error.status,
           code: error.code,
         })
-        toast.error('بيانات الدخول غير صحيحة')
+        toast.error(locale === 'ar' ? 'بيانات الدخول غير صحيحة' : 'Invalid login credentials')
         setLoading(false)
         return
       }
@@ -79,7 +81,7 @@ export default function LoginPage() {
       const userId = data.user?.id
   
       if (!userId) {
-        toast.error('تعذر قراءة بيانات المستخدم')
+        toast.error(locale === 'ar' ? 'تعذر قراءة بيانات المستخدم' : 'Could not read user data')
         setLoading(false)
         return
       }
@@ -99,7 +101,7 @@ export default function LoginPage() {
           hint: profileError?.hint,
           hasProfile: Boolean(profileData),
         })
-        toast.error('لم يتم العثور على صلاحية المستخدم')
+        toast.error(locale === 'ar' ? 'لم يتم العثور على صلاحية المستخدم' : 'User role was not found')
         setLoading(false)
         return
       }
@@ -114,11 +116,11 @@ export default function LoginPage() {
         return
       }
   
-      toast.error('نوع المستخدم غير معروف')
+      toast.error(locale === 'ar' ? 'نوع المستخدم غير معروف' : 'Unknown user type')
       setLoading(false)
     } catch (err) {
       console.error('Login error:', err)
-      toast.error('حدث خطأ أثناء تسجيل الدخول')
+      toast.error(locale === 'ar' ? 'حدث خطأ أثناء تسجيل الدخول' : 'An error occurred while signing in')
       setLoading(false)
     }
   }
@@ -136,7 +138,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-100 flex items-center justify-center p-4" dir="rtl">
+    <div className="min-h-screen bg-stone-100 flex items-center justify-center p-4" dir={dir}>
       {/* Background pattern */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl" />
@@ -162,24 +164,41 @@ export default function LoginPage() {
       </div>
 
       <div className="relative w-full max-w-sm">
+        <div className="mb-5 flex justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => setLocale(locale === 'ar' ? 'en' : 'ar')}
+            className="px-3 py-1.5 text-xs font-semibold rounded-full bg-white border border-stone-200 text-stone-600 hover:bg-stone-50 transition-colors"
+          >
+            {t('language')}
+          </button>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="w-8 h-8 rounded-full bg-white border border-stone-200 text-stone-600 hover:bg-stone-50 inline-flex items-center justify-center transition-colors"
+            title={theme === 'dark' ? t('light') : t('dark')}
+          >
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+        </div>
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-500 rounded-2xl mb-4 shadow-lg shadow-brand-500/30">
             <Package size={32} className="text-white" />
           </div>
-          <h1 className="text-2xl font-display font-bold text-stone-900">نظام الطلبات</h1>
-          <p className="text-stone-500 text-sm mt-1">إدارة طلبات الإنتاج مع المصانع</p>
+          <h1 className="text-2xl font-display font-bold text-stone-900">{locale === 'ar' ? 'نظام الطلبات' : 'Orders System'}</h1>
+          <p className="text-stone-500 text-sm mt-1">{locale === 'ar' ? 'إدارة طلبات الإنتاج مع المصانع' : 'Manage production orders with factories'}</p>
         </div>
 
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-xl shadow-stone-200/80 p-8 border border-stone-200/60">
-          <h2 className="text-lg font-bold text-stone-800 mb-6">تسجيل الدخول</h2>
+          <h2 className="text-lg font-bold text-stone-800 mb-6">{t('login')}</h2>
 
           <form onSubmit={handleLogin} className="space-y-4">
             {/* Email */}
             <div>
               <label className="block text-sm font-medium text-stone-700 mb-1.5">
-                البريد الإلكتروني
+                {t('email')}
               </label>
               <input
                 type="email"
@@ -197,7 +216,7 @@ export default function LoginPage() {
             {/* Password */}
             <div>
               <label className="block text-sm font-medium text-stone-700 mb-1.5">
-                كلمة المرور
+                {t('password')}
               </label>
               <div className="relative">
                 <input
@@ -234,10 +253,10 @@ export default function LoginPage() {
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  جاري الدخول...
+                  {locale === 'ar' ? 'جاري الدخول...' : 'Signing in...'}
                 </span>
               ) : (
-                'دخول'
+                t('signIn')
               )}
             </button>
 
@@ -246,14 +265,14 @@ export default function LoginPage() {
                 href="/forgot-password"
                 className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors"
               >
-                نسيت كلمة المرور؟
+                {t('forgotPassword')}
               </Link>
             </div>
           </form>
         </div>
 
         <p className="text-center text-xs text-stone-400 mt-6">
-          للمساعدة تواصل مع مدير النظام
+          {locale === 'ar' ? 'للمساعدة تواصل مع مدير النظام' : 'Contact the system admin for help'}
         </p>
       </div>
     </div>

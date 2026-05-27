@@ -13,8 +13,12 @@
   box-sizing: border-box;
 }
 
-html {
+html[dir='rtl'] {
   direction: rtl;
+}
+
+html[dir='ltr'] {
+  direction: ltr;
 }
 
 body {
@@ -22,6 +26,60 @@ body {
   background-color: #f8f7f5;
   color: #1a1a1a;
   min-height: 100vh;
+}
+
+.dark body {
+  background-color: #11100f;
+  color: #f5f5f4;
+}
+
+.dark .bg-stone-50,
+.dark .bg-stone-100,
+.dark .bg-white {
+  background-color: #1c1917 !important;
+}
+
+.dark .bg-stone-900,
+.dark .bg-stone-800 {
+  background-color: #0c0a09 !important;
+}
+
+.dark .text-stone-900,
+.dark .text-stone-800,
+.dark .text-stone-700 {
+  color: #f5f5f4 !important;
+}
+
+.dark .text-stone-600,
+.dark .text-stone-500,
+.dark .text-stone-400 {
+  color: #d6d3d1 !important;
+}
+
+.dark .border-stone-200,
+.dark .border-stone-100,
+.dark .border-stone-200\/60,
+.dark .divide-stone-50 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #44403c !important;
+}
+
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #292524 !important;
+  border-color: #57534e !important;
+  color: #fafaf9 !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #a8a29e !important;
+}
+
+.dark .shadow-sm,
+.dark .shadow-xl,
+.dark .shadow-2xl {
+  box-shadow: none !important;
 }
 
 /* Scrollbar */
@@ -69,8 +127,14 @@ body {
 .status-pending {
   @apply bg-amber-50 text-amber-700 border border-amber-200;
 }
+.status-sewing {
+  @apply bg-cyan-50 text-cyan-700 border border-cyan-200;
+}
 .status-in_progress {
   @apply bg-blue-50 text-blue-700 border border-blue-200;
+}
+.status-rework {
+  @apply bg-orange-50 text-orange-700 border border-orange-200;
 }
 .status-review {
   @apply bg-purple-50 text-purple-700 border border-purple-200;

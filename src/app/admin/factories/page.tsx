@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { Factory } from '@/types'
 import { Building2, CheckCircle, XCircle, Package, Plus, Pencil, Trash2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { usePreferences } from '@/lib/i18n'
 
 type FactoryForm = {
   name: string
@@ -30,6 +31,7 @@ export default function AdminFactoriesPage() {
   const [form, setForm] = useState<FactoryForm>(emptyForm)
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
+  const { locale, t } = usePreferences()
 
   async function load() {
     const { data: f } = await supabase.from('factories').select('*').order('name')
@@ -69,7 +71,7 @@ export default function AdminFactoriesPage() {
   async function saveFactory(e: React.FormEvent) {
     e.preventDefault()
     if (!form.name.trim()) {
-      toast.error('اسم المصنع مطلوب')
+      toast.error(locale === 'ar' ? 'اسم المصنع مطلوب' : 'Factory name is required')
       return
     }
 
@@ -88,28 +90,29 @@ export default function AdminFactoriesPage() {
 
     setSaving(false)
     if (error) {
-      toast.error('تعذر حفظ المصنع')
+      toast.error(locale === 'ar' ? 'تعذر حفظ المصنع' : 'Could not save factory')
       return
     }
 
-    toast.success(editingFactory ? 'تم تحديث المصنع' : 'تمت إضافة المصنع')
+    toast.success(editingFactory ? (locale === 'ar' ? 'تم تحديث المصنع' : 'Factory updated') : (locale === 'ar' ? 'تمت إضافة المصنع' : 'Factory added'))
     setEditingFactory(null)
     setForm(emptyForm)
     load()
   }
 
   async function deleteFactory(factory: Factory) {
+    if (!window.confirm(locale === 'ar' ? 'هل أنت متأكد من حذف هذا المصنع؟' : 'Are you sure you want to delete this factory?')) return
     const count = orderCounts[factory.id] || 0
     const { error } = count > 0
       ? await supabase.from('factories').update({ is_active: false }).eq('id', factory.id)
       : await supabase.from('factories').delete().eq('id', factory.id)
 
     if (error) {
-      toast.error('تعذر حذف المصنع')
+      toast.error(locale === 'ar' ? 'تعذر حذف المصنع' : 'Could not delete factory')
       return
     }
 
-    toast.success(count > 0 ? 'تم تعطيل المصنع لوجود طلبات مرتبطة' : 'تم حذف المصنع')
+    toast.success(count > 0 ? (locale === 'ar' ? 'تم تعطيل المصنع لوجود طلبات مرتبطة' : 'Factory was deactivated because it has linked orders') : (locale === 'ar' ? 'تم حذف المصنع' : 'Factory deleted'))
     load()
   }
 
@@ -117,8 +120,8 @@ export default function AdminFactoriesPage() {
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-display font-bold text-stone-900">المصانع</h1>
-          <p className="text-stone-500 text-sm mt-0.5">{factories.length} مصنع مسجل</p>
+          <h1 className="text-2xl font-display font-bold text-stone-900">{t('factories')}</h1>
+          <p className="text-stone-500 text-sm mt-0.5">{factories.length} {locale === 'ar' ? 'مصنع مسجل' : 'registered factories'}</p>
         </div>
         <button
           type="button"
@@ -126,13 +129,13 @@ export default function AdminFactoriesPage() {
           className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-xl transition-all"
         >
           <Plus size={16} />
-          مصنع جديد
+          {t('newFactory')}
         </button>
       </div>
 
       <form onSubmit={saveFactory} className="bg-white rounded-2xl border border-stone-200/60 shadow-sm p-5 grid md:grid-cols-2 gap-3">
         <div className="md:col-span-2 flex items-center justify-between">
-          <h2 className="font-bold text-stone-900">{editingFactory ? 'تعديل مصنع' : 'إضافة مصنع'}</h2>
+          <h2 className="font-bold text-stone-900">{editingFactory ? t('editFactory') : t('addFactory')}</h2>
           {editingFactory && (
             <button type="button" onClick={startCreate} className="text-stone-400 hover:text-stone-700">
               <X size={18} />
@@ -142,20 +145,20 @@ export default function AdminFactoriesPage() {
         <input
           value={form.name}
           onChange={e => setForm(current => ({ ...current, name: e.target.value }))}
-          placeholder="اسم المصنع"
+          placeholder={t('factoryName')}
           className="px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
         />
         <input
           value={form.phone}
           onChange={e => setForm(current => ({ ...current, phone: e.target.value }))}
-          placeholder="رقم التواصل"
+          placeholder={t('contactPhone')}
           dir="ltr"
           className="px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
         />
         <input
           value={form.email}
           onChange={e => setForm(current => ({ ...current, email: e.target.value }))}
-          placeholder="البريد الإلكتروني"
+          placeholder={t('email')}
           dir="ltr"
           className="px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
         />
@@ -166,12 +169,12 @@ export default function AdminFactoriesPage() {
             onChange={e => setForm(current => ({ ...current, is_active: e.target.checked }))}
             className="rounded border-stone-300 text-brand-500"
           />
-          نشط
+          {t('active')}
         </label>
         <textarea
           value={form.contact_person}
           onChange={e => setForm(current => ({ ...current, contact_person: e.target.value }))}
-          placeholder="اسم مسؤول التواصل"
+          placeholder={t('contactPerson')}
           rows={2}
           className="md:col-span-2 px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand-400"
         />
@@ -180,7 +183,7 @@ export default function AdminFactoriesPage() {
           disabled={saving}
           className="md:col-span-2 py-2.5 bg-stone-900 hover:bg-stone-800 disabled:bg-stone-300 text-white text-sm font-semibold rounded-xl transition-all"
         >
-          {saving ? 'جاري الحفظ...' : editingFactory ? 'حفظ التعديل' : 'إضافة المصنع'}
+          {saving ? t('saving') : editingFactory ? t('saveChanges') : t('addFactory')}
         </button>
       </form>
 
@@ -207,19 +210,19 @@ export default function AdminFactoriesPage() {
                 {factory.is_active ? (
                   <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 border border-green-200 px-2 py-1 rounded-full">
                     <CheckCircle size={12} />
-                    نشط
+                    {t('active')}
                   </span>
                 ) : (
                   <span className="flex items-center gap-1 text-xs text-red-500 bg-red-50 border border-red-200 px-2 py-1 rounded-full">
                     <XCircle size={12} />
-                    غير نشط
+                    {t('inactive')}
                   </span>
                 )}
               </div>
 
               <div className="flex items-center gap-2 text-sm text-stone-500 mt-3 pt-3 border-t border-stone-100">
                 <Package size={14} />
-                <span>{orderCounts[factory.id] || 0} طلب</span>
+                <span>{orderCounts[factory.id] || 0} {locale === 'ar' ? 'طلب' : 'orders'}</span>
                 {factory.email && (
                   <>
                     <span className="mx-1 text-stone-300">•</span>
@@ -231,7 +234,7 @@ export default function AdminFactoriesPage() {
                     type="button"
                     onClick={() => startEdit(factory)}
                     className="w-8 h-8 rounded-lg hover:bg-stone-100 text-stone-500 inline-flex items-center justify-center"
-                    title="تعديل"
+                    title={t('edit')}
                   >
                     <Pencil size={15} />
                   </button>
@@ -239,7 +242,7 @@ export default function AdminFactoriesPage() {
                     type="button"
                     onClick={() => deleteFactory(factory)}
                     className="w-8 h-8 rounded-lg hover:bg-red-50 text-red-500 inline-flex items-center justify-center"
-                    title="حذف"
+                    title={t('delete')}
                   >
                     <Trash2 size={15} />
                   </button>
