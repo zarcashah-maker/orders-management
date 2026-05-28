@@ -113,11 +113,20 @@ export default function AdminOrdersPage() {
           <h1 className="text-2xl font-display font-bold text-stone-900">{t('orders')}</h1>
           <p className="text-stone-500 text-sm mt-0.5">{t('totalOrders')}: {orders.length}</p>
         </div>
-        <button
-          onClick={() => setShowNewOrder(true)}
+        <Link
+          href="/admin/orders/new"
           className="flex items-center gap-2 px-4 py-2.5 bg-brand-500 hover:bg-brand-600
             text-white text-sm font-semibold rounded-xl transition-all
-            shadow-md shadow-brand-500/25 hover:shadow-lg hover:shadow-brand-500/30 hover:-translate-y-0.5"
+            shadow-md shadow-brand-500/25 hover:shadow-lg hover:shadow-brand-500/30 hover:-translate-y-0.5 lg:hidden"
+        >
+          <Plus size={18} />
+          <span className="hidden sm:block">{t('newOrder')}</span>
+        </Link>
+        <button
+          onClick={() => setShowNewOrder(true)}
+          className="hidden items-center gap-2 px-4 py-2.5 bg-brand-500 hover:bg-brand-600
+            text-white text-sm font-semibold rounded-xl transition-all
+            shadow-md shadow-brand-500/25 hover:shadow-lg hover:shadow-brand-500/30 hover:-translate-y-0.5 lg:flex"
         >
           <Plus size={18} />
           <span className="hidden sm:block">{t('newOrder')}</span>
