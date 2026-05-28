@@ -49,21 +49,50 @@ export type ProductDetailField = {
   placeholder?: string
   type?: 'text' | 'select'
   options?: string[]
+  customOption?: string
+  customPlaceholder?: string
+  showWhen?: {
+    key: string
+    values: string[]
+  }
 }
+
+const sizes = ['XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL']
+
+const arabicProductColors = ['أسود', 'رمادي', 'كحلي', 'أبيض', 'أصفر', 'أحمر', 'زهري', 'أخرى...']
+const englishProductColors = ['Black', 'Gray', 'Navy', 'White', 'Yellow', 'Red', 'Pink', 'Other...']
+const arabicCapColors = ['أسود', 'كحلي', 'ليلكي', 'برغندي', 'أخرى...']
+const englishCapColors = ['Black', 'Navy', 'Lilac', 'Burgundy', 'Other...']
+const arabicSashColors = ['أسود', 'كحلي', 'ليلكي', 'برغندي', 'أبيض', 'أخرى...']
+const englishSashColors = ['Black', 'Navy', 'Lilac', 'Burgundy', 'White', 'Other...']
 
 export const PRODUCT_DETAIL_FIELDS_BY_LOCALE: Record<Locale, Record<ProductType, ProductDetailField[]>> = {
   ar: {
     graduation_cap: [
-    { key: 'cap_color', label: 'لون القبعة', placeholder: 'مثال: أسود' },
-    { key: 'cap_size', label: 'مقاس القبعة', placeholder: 'مثال: قياسي' },
-    { key: 'tassel_color', label: 'لون الدندوش', placeholder: 'مثال: ذهبي' },
+    {
+      key: 'cap_color',
+      label: 'لون القبعة',
+      type: 'select',
+      options: arabicCapColors,
+      customOption: 'أخرى...',
+      customPlaceholder: 'اكتب لون القبعة',
+    },
+    { key: 'cap_size', label: 'مقاس القبعة', type: 'select', options: ['صغير 21×21', 'وسط 24×24', 'كبير 27×27'] },
+    { key: 'tassel_color', label: 'لون الهدب', type: 'select', options: ['فضي', 'ذهبي', 'أسود'] },
     ],
     graduation_sash: [
-    { key: 'fabric_color', label: 'لون القماش' },
-    { key: 'fabric_type', label: 'نوع القماش' },
-    { key: 'embroidery_font', label: 'خط التطريز' },
-    { key: 'cord', label: 'الحبل', type: 'select', options: ['مع حبل', 'بدون حبل'] },
-    { key: 'cord_color', label: 'لون الحبل' },
+    {
+      key: 'fabric_color',
+      label: 'لون القماش',
+      type: 'select',
+      options: arabicSashColors,
+      customOption: 'أخرى...',
+      customPlaceholder: 'اكتب لون القماش',
+    },
+    { key: 'fabric_type', label: 'نوع القماش', type: 'select', options: ['مخمل', 'تفته', 'غير مخمل'] },
+    { key: 'embroidery_font', label: 'الخط المستخدم للكتابة' },
+    { key: 'cord', label: 'قيطان أو بدون', type: 'select', options: ['قيطان', 'بدون قيطان'] },
+    { key: 'cord_color', label: 'لون القيطان', type: 'select', options: ['فضي', 'ذهبي'], showWhen: { key: 'cord', values: ['قيطان', 'Cord'] } },
     { key: 'sash_cut', label: 'قصة الوشاح' },
     { key: 'sash_size', label: 'مقاس الوشاح' },
     ],
@@ -75,15 +104,31 @@ export const PRODUCT_DETAIL_FIELDS_BY_LOCALE: Record<Locale, Record<ProductType,
     { key: 'sleeve_style', label: 'شكل الكم' },
     ],
     graduation_jacket: [
-    { key: 'size', label: 'المقاس' },
+    { key: 'size', label: 'المقاس', type: 'select', options: sizes },
     {
       key: 'sleeve_color',
       label: 'لون الأكمام',
       type: 'select',
-      options: ['أسود', 'رمادي', 'كحلي', 'أبيض', 'أصفر', 'أحمر', 'وردي'],
+      options: arabicProductColors,
+      customOption: 'أخرى...',
+      customPlaceholder: 'اكتب لون الأكمام',
     },
-    { key: 'rib_color', label: 'لون الريب' },
-    { key: 'jacket_color', label: 'لون الجاكيت' },
+    {
+      key: 'rib_color',
+      label: 'لون الريب',
+      type: 'select',
+      options: arabicProductColors,
+      customOption: 'أخرى...',
+      customPlaceholder: 'اكتب لون الريب',
+    },
+    {
+      key: 'jacket_color',
+      label: 'لون الجاكيت',
+      type: 'select',
+      options: arabicProductColors,
+      customOption: 'أخرى...',
+      customPlaceholder: 'اكتب لون الجاكيت',
+    },
     ],
     tshirt: [
     { key: 'size', label: 'المقاس' },
@@ -99,16 +144,30 @@ export const PRODUCT_DETAIL_FIELDS_BY_LOCALE: Record<Locale, Record<ProductType,
   },
   en: {
     graduation_cap: [
-      { key: 'cap_color', label: 'Cap color', placeholder: 'Example: Black' },
-      { key: 'cap_size', label: 'Cap size', placeholder: 'Example: Standard' },
-      { key: 'tassel_color', label: 'Tassel color', placeholder: 'Example: Gold' },
+      {
+        key: 'cap_color',
+        label: 'Cap color',
+        type: 'select',
+        options: englishCapColors,
+        customOption: 'Other...',
+        customPlaceholder: 'Type cap color',
+      },
+      { key: 'cap_size', label: 'Cap size', type: 'select', options: ['Small 21×21', 'Medium 24×24', 'Large 27×27'] },
+      { key: 'tassel_color', label: 'Tassel color', type: 'select', options: ['Silver', 'Gold', 'Black'] },
     ],
     graduation_sash: [
-      { key: 'fabric_color', label: 'Fabric color' },
-      { key: 'fabric_type', label: 'Fabric type' },
-      { key: 'embroidery_font', label: 'Embroidery font' },
-      { key: 'cord', label: 'Cord', type: 'select', options: ['With cord', 'Without cord'] },
-      { key: 'cord_color', label: 'Cord color' },
+      {
+        key: 'fabric_color',
+        label: 'Fabric color',
+        type: 'select',
+        options: englishSashColors,
+        customOption: 'Other...',
+        customPlaceholder: 'Type fabric color',
+      },
+      { key: 'fabric_type', label: 'Fabric type', type: 'select', options: ['Velvet', 'Taffeta', 'Non-velvet'] },
+      { key: 'embroidery_font', label: 'Writing font' },
+      { key: 'cord', label: 'Cord option', type: 'select', options: ['Cord', 'No cord'] },
+      { key: 'cord_color', label: 'Cord color', type: 'select', options: ['Silver', 'Gold'], showWhen: { key: 'cord', values: ['Cord', 'قيطان'] } },
       { key: 'sash_cut', label: 'Sash cut/style' },
       { key: 'sash_size', label: 'Sash size' },
     ],
@@ -120,15 +179,31 @@ export const PRODUCT_DETAIL_FIELDS_BY_LOCALE: Record<Locale, Record<ProductType,
       { key: 'sleeve_style', label: 'Sleeve style' },
     ],
     graduation_jacket: [
-      { key: 'size', label: 'Size' },
+      { key: 'size', label: 'Size', type: 'select', options: sizes },
       {
         key: 'sleeve_color',
         label: 'Sleeve color',
         type: 'select',
-        options: ['Black', 'Gray', 'Navy', 'White', 'Yellow', 'Red', 'Pink'],
+        options: englishProductColors,
+        customOption: 'Other...',
+        customPlaceholder: 'Type sleeve color',
       },
-      { key: 'rib_color', label: 'Rib color' },
-      { key: 'jacket_color', label: 'Jacket color' },
+      {
+        key: 'rib_color',
+        label: 'Rib color',
+        type: 'select',
+        options: englishProductColors,
+        customOption: 'Other...',
+        customPlaceholder: 'Type rib color',
+      },
+      {
+        key: 'jacket_color',
+        label: 'Jacket color',
+        type: 'select',
+        options: englishProductColors,
+        customOption: 'Other...',
+        customPlaceholder: 'Type jacket color',
+      },
     ],
     tshirt: [
       { key: 'size', label: 'Size' },

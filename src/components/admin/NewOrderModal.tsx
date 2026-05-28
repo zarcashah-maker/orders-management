@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Factory, ProductType } from '@/types'
 import {
@@ -21,7 +21,21 @@ interface Props {
   onCreated: () => void
 }
 
+type PendingUpload = {
+  file: File
+  isDesignImage: boolean
+}
+
+type UploadedOrderFile = PendingUpload & {
+  storagePath: string
+  publicUrl: string
+}
+
+const customDetailSuffix = '__custom'
+
 export function NewOrderModal({ factories, onClose, onCreated }: Props) {
+  const idPrefix = useId()
+  const createInFlightRef = useRef(false)
   const [productType, setProductType] = useState<ProductType | ''>('')
   const [details, setDetails] = useState<Record<string, string>>({})
   const [sallaOrderNumber, setSallaOrderNumber] = useState('')
@@ -33,30 +47,37 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
   const [quantity, setQuantity] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [saving, setSaving] = useState(false)
+  const [filePickerActive, setFilePickerActive] = useState(false)
   const supabase = createClient()
   const { profile } = useAuth()
   const { locale, t } = usePreferences()
   const productTypeOptions = getProductTypeOptions(locale)
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLElement | null
-    if (submitter?.dataset.action !== 'create-order') return
-
+  async function handleCreate() {
+    if (createInFlightRef.current || saving) return
     if (!productType || !factoryId) {
       toast.error(locale === 'ar' ? 'يرجى اختيار نوع المنتج واختيار المصنع' : 'Please select a product type and factory')
       return
     }
+
+    createInFlightRef.current = true
     setSaving(true)
+    const orderId = crypto.randomUUID()
+    let uploadedFiles: UploadedOrderFile[] = []
+    let orderWasInserted = false
+
     try {
-      const orderDetails = Object.fromEntries(
-        Object.entries(details)
-          .map(([key, value]) => [key, value.trim()])
-          .filter(([, value]) => value)
-      )
+      const orderDetails = buildOrderDetails()
       const internalOrderNumber = generateOrderNumber()
-      const { data: order, error } = await supabase.from('orders').insert({
-        id: crypto.randomUUID(),
+      const files: PendingUpload[] = [
+        ...designImages.map(file => ({ file, isDesignImage: true })),
+        ...attachments.map(file => ({ file, isDesignImage: false })),
+      ]
+
+      uploadedFiles = await uploadOrderFiles(orderId, files)
+
+      const { error } = await supabase.from('orders').insert({
+        id: orderId,
         order_number: internalOrderNumber,
         salla_order_number: sallaOrderNumber.trim() || null,
         customer_phone: customerPhone.trim() || null,
@@ -69,38 +90,14 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
         status: 'pending',
         created_by: profile?.id || null,
         order_date: new Date().toISOString().slice(0, 10),
-      }).select('id').single()
+      })
       if (error) throw error
+      orderWasInserted = true
 
-      const files = [
-        ...designImages.map(file => ({ file, isDesignImage: true })),
-        ...attachments.map(file => ({ file, isDesignImage: false })),
-      ]
-
-      if (files.length > 0 && order?.id) {
-        const uploaded = await Promise.all(files.map(async ({ file, isDesignImage }) => {
-          const safeName = file.name.replace(/[^\w.\-]+/g, '-')
-          const storagePath = `${order.id}/${crypto.randomUUID()}-${safeName}`
-          const { error: uploadError } = await supabase.storage
-            .from('order-attachments')
-            .upload(storagePath, file)
-          if (uploadError) throw uploadError
-
-          const { data: publicUrlData } = supabase.storage
-            .from('order-attachments')
-            .getPublicUrl(storagePath)
-
-          return {
-            file,
-            isDesignImage,
-            storagePath,
-            publicUrl: publicUrlData.publicUrl,
-          }
-        }))
-
-        const attachmentRows = uploaded.map(item => ({
+      if (uploadedFiles.length > 0) {
+        const attachmentRows = uploadedFiles.map(item => ({
           id: crypto.randomUUID(),
-          order_id: order.id,
+          order_id: orderId,
           file_url: item.publicUrl,
           file_name: item.file.name,
           attachment_type: item.file.type || 'application/octet-stream',
@@ -110,40 +107,146 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
         const { error: attachmentError } = await supabase.from('attachments').insert(attachmentRows)
         if (attachmentError) throw attachmentError
 
-        const imageRows = uploaded
+        const imageRows = uploadedFiles
           .filter(item => item.isDesignImage || isImageAttachment({ file_name: item.file.name, attachment_type: item.file.type || 'application/octet-stream' }))
           .map(item => ({
-            order_id: order.id,
+            order_id: orderId,
             url: item.publicUrl,
             caption: item.isDesignImage ? 'Design image' : item.file.name,
           }))
 
         if (imageRows.length > 0) {
           const { error: imageError } = await supabase.from('order_images').insert(imageRows)
-          if (imageError) throw imageError
+          if (imageError) {
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('Order thumbnail rows were not created, but the order and attachments were saved.', imageError)
+            }
+          }
         }
       }
 
       toast.success(locale === 'ar' ? 'تم إنشاء الطلب بنجاح' : 'Order created successfully')
       onCreated()
     } catch (err) {
-      console.error('Create order error:', err)
-      toast.error(locale === 'ar' ? 'حدث خطأ أثناء الإنشاء' : 'Could not create order')
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Create order error:', err)
+      }
+      await rollbackFailedCreate(orderId, uploadedFiles, orderWasInserted)
+      toast.error(locale === 'ar' ? 'تعذر إنشاء الطلب. لم يتم حفظ طلب جزئي.' : 'Could not create order. No partial order was saved.')
     } finally {
       setSaving(false)
+      createInFlightRef.current = false
+    }
+  }
+
+  function buildOrderDetails() {
+    if (!productType) return {}
+    const fields = PRODUCT_DETAIL_FIELDS_BY_LOCALE[locale][productType]
+    const result: Record<string, string> = {}
+
+    fields.forEach(field => {
+      if (!isDetailFieldVisible(field.key)) return
+      const selectedValue = (details[field.key] || '').trim()
+      const customValue = (details[`${field.key}${customDetailSuffix}`] || '').trim()
+      const finalValue = field.customOption && selectedValue === field.customOption ? customValue : selectedValue
+      if (finalValue) result[field.key] = finalValue
+    })
+
+    return result
+  }
+
+  async function uploadOrderFiles(orderId: string, files: PendingUpload[]) {
+    const uploaded: UploadedOrderFile[] = []
+
+    try {
+      for (const item of files) {
+        const safeName = item.file.name.replace(/[^\w.\-]+/g, '-')
+        const storagePath = `${orderId}/${crypto.randomUUID()}-${safeName}`
+        const { error: uploadError } = await supabase.storage
+          .from('order-attachments')
+          .upload(storagePath, item.file)
+        if (uploadError) throw uploadError
+
+        const { data: publicUrlData } = supabase.storage
+          .from('order-attachments')
+          .getPublicUrl(storagePath)
+
+        uploaded.push({
+          ...item,
+          storagePath,
+          publicUrl: publicUrlData.publicUrl,
+        })
+      }
+    } catch (err) {
+      await removeUploadedFiles(uploaded)
+      throw err
+    }
+
+    return uploaded
+  }
+
+  async function rollbackFailedCreate(orderId: string, uploaded: UploadedOrderFile[], orderWasInserted: boolean) {
+    if (orderWasInserted) {
+      await supabase.from('orders').delete().eq('id', orderId)
+    }
+    await removeUploadedFiles(uploaded)
+  }
+
+  async function removeUploadedFiles(uploaded: UploadedOrderFile[]) {
+    const paths = uploaded.map(item => item.storagePath)
+    if (paths.length === 0) return
+    const { error } = await supabase.storage.from('order-attachments').remove(paths)
+    if (error && process.env.NODE_ENV === 'development') {
+      console.warn('Could not remove uploaded files after failed order creation.', error)
     }
   }
 
   function handleDesignImagesChange(e: React.ChangeEvent<HTMLInputElement>) {
-    e.preventDefault()
-    e.stopPropagation()
     setDesignImages(Array.from(e.currentTarget.files || []))
+    window.setTimeout(() => setFilePickerActive(false), 300)
   }
 
   function handleAttachmentsChange(e: React.ChangeEvent<HTMLInputElement>) {
-    e.preventDefault()
-    e.stopPropagation()
     setAttachments(Array.from(e.currentTarget.files || []))
+    window.setTimeout(() => setFilePickerActive(false), 300)
+  }
+
+  function handleFilePickerOpen() {
+    setFilePickerActive(true)
+    window.setTimeout(() => setFilePickerActive(false), 3000)
+  }
+
+  function requestClose() {
+    if (saving || filePickerActive) return
+    onClose()
+  }
+
+  function updateDetail(key: string, value: string) {
+    setDetails(current => {
+      const next = { ...current, [key]: value }
+      const customKey = `${key}${customDetailSuffix}`
+      if (value !== getDetailField(key)?.customOption) delete next[customKey]
+
+      PRODUCT_DETAIL_FIELDS_BY_LOCALE[locale][productType as ProductType]?.forEach(field => {
+        if (field.showWhen?.key === key && !field.showWhen.values.includes(value)) {
+          delete next[field.key]
+          delete next[`${field.key}${customDetailSuffix}`]
+        }
+      })
+
+      return next
+    })
+  }
+
+  function getDetailField(key: string) {
+    if (!productType) return undefined
+    return PRODUCT_DETAIL_FIELDS_BY_LOCALE[locale][productType].find(field => field.key === key)
+  }
+
+  function isDetailFieldVisible(key: string) {
+    const field = getDetailField(key)
+    if (!field?.showWhen) return true
+    return field.showWhen.values.includes(details[field.showWhen.key])
   }
 
   return (
@@ -161,13 +264,13 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
             </div>
             <h2 className="font-bold text-stone-900">{t('newOrder')}</h2>
           </div>
-          <button type="button" onClick={onClose} className="text-stone-400 hover:text-stone-600 transition-colors p-1">
+          <button type="button" onClick={requestClose} disabled={saving || filePickerActive} className="text-stone-400 hover:text-stone-600 disabled:opacity-40 transition-colors p-1">
             <X size={20} />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto max-h-[calc(100vh-6.5rem)]">
+        <div className="p-5 space-y-4 overflow-y-auto overscroll-contain max-h-[calc(100vh-6.5rem)] [-webkit-overflow-scrolling:touch]">
           {/* Product type */}
           <div>
             <label className="block text-sm font-medium text-stone-700 mb-1.5">{t('productType')} *</label>
@@ -220,33 +323,51 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
             <div className="rounded-2xl bg-brand-50/40 border border-brand-100 p-4">
               <p className="text-sm font-semibold text-stone-800 mb-3">{t('details')} {getProductTypeLabel(productType, null, locale)}</p>
               <div className="grid sm:grid-cols-2 gap-3">
-                {PRODUCT_DETAIL_FIELDS_BY_LOCALE[locale][productType].map(field => (
-                  <div key={field.key}>
-                    <label className="block text-sm font-medium text-stone-700 mb-1.5">{field.label}</label>
-                    {field.type === 'select' ? (
-                      <select
-                        value={details[field.key] || ''}
-                        onChange={e => setDetails(current => ({ ...current, [field.key]: e.target.value }))}
-                        className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-sm
-                          focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent appearance-none"
-                      >
-                        <option value="">{locale === 'ar' ? 'اختر' : 'Select'}</option>
-                        {field.options?.map(option => (
-                          <option key={option} value={option}>{option}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        value={details[field.key] || ''}
-                        onChange={e => setDetails(current => ({ ...current, [field.key]: e.target.value }))}
-                        placeholder={field.placeholder}
-                        className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-sm
-                          focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
-                      />
-                    )}
-                  </div>
-                ))}
+                {PRODUCT_DETAIL_FIELDS_BY_LOCALE[locale][productType].filter(field => isDetailFieldVisible(field.key)).map(field => {
+                  const selectedValue = details[field.key] || ''
+                  const customKey = `${field.key}${customDetailSuffix}`
+                  const isCustom = Boolean(field.customOption && selectedValue === field.customOption)
+
+                  return (
+                    <div key={field.key}>
+                      <label className="block text-sm font-medium text-stone-700 mb-1.5">{field.label}</label>
+                      {field.type === 'select' ? (
+                        <div className="space-y-2">
+                          <select
+                            value={selectedValue}
+                            onChange={e => updateDetail(field.key, e.target.value)}
+                            className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-sm
+                              focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent appearance-none"
+                          >
+                            <option value="">{locale === 'ar' ? 'اختر' : 'Select'}</option>
+                            {field.options?.map(option => (
+                              <option key={option} value={option}>{option}</option>
+                            ))}
+                          </select>
+                          {isCustom && (
+                            <input
+                              type="text"
+                              value={details[customKey] || ''}
+                              onChange={e => setDetails(current => ({ ...current, [customKey]: e.target.value }))}
+                              placeholder={field.customPlaceholder || (locale === 'ar' ? 'اكتب القيمة' : 'Type value')}
+                              className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-sm
+                                focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+                            />
+                          )}
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          value={details[field.key] || ''}
+                          onChange={e => updateDetail(field.key, e.target.value)}
+                          placeholder={field.placeholder}
+                          className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-sm
+                            focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+                        />
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -317,15 +438,22 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
                 <ImageIcon size={16} className="text-stone-500" />
                 <label className="text-sm font-semibold text-stone-800">{locale === 'ar' ? 'صور التصميم / المنتج' : 'Design / Product Images'}</label>
               </div>
-              <div onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleDesignImagesChange}
-                  className="block w-full text-sm text-stone-500 file:ml-3 file:border-0 file:rounded-lg file:bg-brand-500 file:text-white file:px-3 file:py-2 file:text-sm"
-                />
-              </div>
+              <input
+                id={`${idPrefix}-design-images`}
+                type="file"
+                accept="image/*"
+                multiple
+                onClick={handleFilePickerOpen}
+                onChange={handleDesignImagesChange}
+                className="sr-only"
+              />
+              <label
+                htmlFor={`${idPrefix}-design-images`}
+                onClick={handleFilePickerOpen}
+                className="inline-flex w-full cursor-pointer items-center justify-center rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+              >
+                {locale === 'ar' ? 'اختيار الصور' : 'Choose Images'}
+              </label>
               <p className="mt-2 text-xs text-stone-400">
                 {designImages.length
                   ? `${designImages.length} ${locale === 'ar' ? 'ملف محدد' : 'selected files'}`
@@ -345,14 +473,21 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
                 <Paperclip size={16} className="text-stone-500" />
                 <label className="text-sm font-semibold text-stone-800">{locale === 'ar' ? 'مرفقات إضافية' : 'Additional Attachments'}</label>
               </div>
-              <div onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
-                <input
-                  type="file"
-                  multiple
-                  onChange={handleAttachmentsChange}
-                  className="block w-full text-sm text-stone-500 file:ml-3 file:border-0 file:rounded-lg file:bg-stone-700 file:text-white file:px-3 file:py-2 file:text-sm"
-                />
-              </div>
+              <input
+                id={`${idPrefix}-attachments`}
+                type="file"
+                multiple
+                onClick={handleFilePickerOpen}
+                onChange={handleAttachmentsChange}
+                className="sr-only"
+              />
+              <label
+                htmlFor={`${idPrefix}-attachments`}
+                onClick={handleFilePickerOpen}
+                className="inline-flex w-full cursor-pointer items-center justify-center rounded-xl bg-stone-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-stone-800"
+              >
+                {locale === 'ar' ? 'اختيار PDF / ملف' : 'Choose PDF / File'}
+              </label>
               <p className="mt-2 text-xs text-stone-400">
                 {attachments.length
                   ? `${attachments.length} ${locale === 'ar' ? 'ملف محدد' : 'selected files'}`
@@ -372,14 +507,15 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
           <div className="flex gap-3 pt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
+              disabled={saving || filePickerActive}
               className="flex-1 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-sm font-medium rounded-xl transition-all"
             >
               {t('cancel')}
             </button>
             <button
-              type="submit"
-              data-action="create-order"
+              type="button"
+              onClick={handleCreate}
               disabled={saving}
               className="flex-1 py-2.5 bg-brand-500 hover:bg-brand-600 disabled:bg-brand-300
                 text-white text-sm font-semibold rounded-xl transition-all"
@@ -387,7 +523,7 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
               {saving ? (locale === 'ar' ? 'جاري الإنشاء...' : 'Creating...') : t('create')}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   )
