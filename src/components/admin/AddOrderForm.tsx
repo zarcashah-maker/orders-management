@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Factory, ProductType } from '@/types'
 import {
@@ -33,6 +33,30 @@ type UploadedOrderFile = PendingUpload & {
 }
 
 const customDetailSuffix = '__custom'
+const draftStorageKey = 'add_order_draft_v1'
+const draftDbName = 'orders_management_add_order_draft'
+const draftDbVersion = 1
+const draftFilesStore = 'files'
+
+type DraftFileKind = 'designImages' | 'attachments'
+
+type StoredDraftFile = {
+  id: string
+  kind: DraftFileKind
+  file: File
+  savedAt: number
+}
+
+type AddOrderDraft = {
+  productType: ProductType | ''
+  details: Record<string, string>
+  sallaOrderNumber: string
+  customerPhone: string
+  notes: string
+  factoryId: string
+  quantity: string
+  dueDate: string
+}
 
 export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' }: AddOrderFormProps) {
   const idPrefix = useId()
@@ -48,6 +72,7 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
   const [quantity, setQuantity] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [saving, setSaving] = useState(false)
+  const [draftRestored, setDraftRestored] = useState(false)
   const supabase = createClient()
   const { profile } = useAuth()
   const { locale, t } = usePreferences()
@@ -58,6 +83,94 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
     if (process.env.NODE_ENV === 'development') {
       console.info(`[add-order-form] ${message}`, data || {})
     }
+  }
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function restoreDraft() {
+      try {
+        const saved = window.sessionStorage.getItem(draftStorageKey)
+        if (saved) {
+          const draft = JSON.parse(saved) as Partial<AddOrderDraft>
+          if (cancelled) return
+          setProductType(draft.productType || '')
+          setDetails(draft.details || {})
+          setSallaOrderNumber(draft.sallaOrderNumber || '')
+          setCustomerPhone(draft.customerPhone || '')
+          setNotes(draft.notes || '')
+          setFactoryId(draft.factoryId || factories[0]?.id || '')
+          setQuantity(draft.quantity || '')
+          setDueDate(draft.dueDate || '')
+        }
+
+        const files = await readDraftFiles()
+        if (cancelled) return
+        const restoredDesignImages = files.filter(item => item.kind === 'designImages').map(item => item.file)
+        const restoredAttachments = files.filter(item => item.kind === 'attachments').map(item => item.file)
+        if (restoredDesignImages.length > 0) setDesignImages(restoredDesignImages)
+        if (restoredAttachments.length > 0) setAttachments(restoredAttachments)
+        if (saved || files.length > 0) {
+          logForm('restored add order draft', {
+            hasFields: Boolean(saved),
+            designImages: restoredDesignImages.length,
+            attachments: restoredAttachments.length,
+          })
+        }
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[add-order-form] could not restore draft', err)
+        }
+      } finally {
+        if (!cancelled) setDraftRestored(true)
+      }
+    }
+
+    restoreDraft()
+
+    return () => {
+      cancelled = true
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (!draftRestored) return
+    persistDraft()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftRestored, productType, details, sallaOrderNumber, customerPhone, notes, factoryId, quantity, dueDate])
+
+  useEffect(() => {
+    function handlePageShow(event: PageTransitionEvent) {
+      logForm('pageshow', { persisted: event.persisted })
+    }
+
+    function handlePageHide(event: PageTransitionEvent) {
+      logForm('pagehide', { persisted: event.persisted })
+      persistDraft()
+    }
+
+    window.addEventListener('pageshow', handlePageShow)
+    window.addEventListener('pagehide', handlePageHide)
+    return () => {
+      window.removeEventListener('pageshow', handlePageShow)
+      window.removeEventListener('pagehide', handlePageHide)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productType, details, sallaOrderNumber, customerPhone, notes, factoryId, quantity, dueDate])
+
+  function persistDraft() {
+    const draft: AddOrderDraft = {
+      productType,
+      details,
+      sallaOrderNumber,
+      customerPhone,
+      notes,
+      factoryId,
+      quantity,
+      dueDate,
+    }
+    window.sessionStorage.setItem(draftStorageKey, JSON.stringify(draft))
   }
 
   async function handleCreate() {
@@ -132,6 +245,9 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
 
       toast.success(locale === 'ar' ? 'تم إنشاء الطلب بنجاح' : 'Order created successfully')
       logForm('order created successfully; calling onCreated')
+      await clearDraft().catch(err => {
+        if (process.env.NODE_ENV === 'development') console.warn('[add-order-form] could not clear draft after create', err)
+      })
       onCreated()
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
@@ -207,6 +323,92 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
     }
   }
 
+  async function openDraftDb() {
+    return new Promise<IDBDatabase>((resolve, reject) => {
+      const request = window.indexedDB.open(draftDbName, draftDbVersion)
+
+      request.onupgradeneeded = () => {
+        const db = request.result
+        if (!db.objectStoreNames.contains(draftFilesStore)) {
+          db.createObjectStore(draftFilesStore, { keyPath: 'id' })
+        }
+      }
+
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async function readDraftFiles() {
+    if (!('indexedDB' in window)) return []
+    const db = await openDraftDb()
+    return new Promise<StoredDraftFile[]>((resolve, reject) => {
+      const transaction = db.transaction(draftFilesStore, 'readonly')
+      const request = transaction.objectStore(draftFilesStore).getAll()
+      request.onsuccess = () => resolve(request.result as StoredDraftFile[])
+      request.onerror = () => reject(request.error)
+      transaction.oncomplete = () => db.close()
+      transaction.onerror = () => {
+        db.close()
+        reject(transaction.error)
+      }
+    })
+  }
+
+  async function replaceDraftFiles(kind: DraftFileKind, files: File[]) {
+    if (!('indexedDB' in window)) return
+    const db = await openDraftDb()
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(draftFilesStore, 'readwrite')
+      const store = transaction.objectStore(draftFilesStore)
+      const getAllRequest = store.getAll()
+
+      getAllRequest.onsuccess = () => {
+        const existing = getAllRequest.result as StoredDraftFile[]
+        existing
+          .filter(item => item.kind === kind)
+          .forEach(item => store.delete(item.id))
+
+        files.forEach(file => {
+          store.put({
+            id: `${kind}-${file.name}-${file.size}-${file.lastModified}`,
+            kind,
+            file,
+            savedAt: Date.now(),
+          } satisfies StoredDraftFile)
+        })
+      }
+
+      transaction.oncomplete = () => {
+        db.close()
+        resolve()
+      }
+      transaction.onerror = () => {
+        db.close()
+        reject(transaction.error)
+      }
+      getAllRequest.onerror = () => reject(getAllRequest.error)
+    })
+  }
+
+  async function clearDraft() {
+    window.sessionStorage.removeItem(draftStorageKey)
+    if (!('indexedDB' in window)) return
+    const db = await openDraftDb()
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(draftFilesStore, 'readwrite')
+      transaction.objectStore(draftFilesStore).clear()
+      transaction.oncomplete = () => {
+        db.close()
+        resolve()
+      }
+      transaction.onerror = () => {
+        db.close()
+        reject(transaction.error)
+      }
+    })
+  }
+
   function updateDetail(key: string, value: string) {
     setDetails(current => {
       const next = { ...current, [key]: value }
@@ -240,6 +442,9 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
       files: getFileDebugInfo(files),
     })
     setDesignImages(files)
+    replaceDraftFiles('designImages', files).catch(err => {
+      if (process.env.NODE_ENV === 'development') console.warn('[add-order-form] could not persist image files', err)
+    })
   }
 
   function handleAttachmentsClick() {
@@ -254,10 +459,29 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
       files: getFileDebugInfo(files),
     })
     setAttachments(files)
+    replaceDraftFiles('attachments', files).catch(err => {
+      if (process.env.NODE_ENV === 'development') console.warn('[add-order-form] could not persist attachment files', err)
+    })
   }
 
-  function handleCancelClick() {
+  function handleAttachmentsInput(e: React.FormEvent<HTMLInputElement>) {
+    const files = Array.from(e.currentTarget.files || [])
+    if (files.length === 0) return
+    logForm('attachment input onInput', {
+      count: files.length,
+      files: getFileDebugInfo(files),
+    })
+    setAttachments(files)
+    replaceDraftFiles('attachments', files).catch(err => {
+      if (process.env.NODE_ENV === 'development') console.warn('[add-order-form] could not persist attachment files from input', err)
+    })
+  }
+
+  async function handleCancelClick() {
     logForm('cancel clicked; calling onCancel')
+    await clearDraft().catch(err => {
+      if (process.env.NODE_ENV === 'development') console.warn('[add-order-form] could not clear draft on cancel', err)
+    })
     onCancel()
   }
 
@@ -478,6 +702,7 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
               type="file"
               multiple
               onClick={handleAttachmentsClick}
+              onInput={handleAttachmentsInput}
               onChange={handleAttachmentsChange}
               className={fileInputClass}
             />

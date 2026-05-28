@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Factory } from '@/types'
@@ -13,7 +13,6 @@ export default function NewOrderPage() {
   const router = useRouter()
   const supabase = createClient()
   const { t, locale } = usePreferences()
-  const allowOrdersNavigationRef = useRef(false)
 
   function logNavigation(message: string, data?: Record<string, unknown>) {
     if (process.env.NODE_ENV === 'development') {
@@ -27,40 +26,13 @@ export default function NewOrderPage() {
       href: window.location.href,
     })
 
-    const guardState = {
-      ...(window.history.state || {}),
-      addOrderGuard: true,
-    }
-
-    window.history.replaceState(guardState, '', '/admin/orders/new')
-    window.history.pushState({ ...guardState, addOrderGuardDuplicate: true }, '', '/admin/orders/new')
-
-    function handlePopState(event: PopStateEvent) {
-      if (allowOrdersNavigationRef.current) {
-        logNavigation('allowed popstate navigation', { state: event.state })
-        return
-      }
-
-      logNavigation('blocked unexpected popstate while adding order', {
-        state: event.state,
-        path: window.location.pathname,
-      })
-      event.stopImmediatePropagation()
-      window.history.pushState({ ...guardState, addOrderGuardRecovered: true }, '', '/admin/orders/new')
-      router.replace('/admin/orders/new')
-    }
-
-    window.addEventListener('popstate', handlePopState)
-
     return () => {
       logNavigation('/admin/orders/new unmounted', {
-        allowed: allowOrdersNavigationRef.current,
         path: window.location.pathname,
       })
-      window.removeEventListener('popstate', handlePopState)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router])
+  }, [])
 
   useEffect(() => {
     supabase
@@ -76,7 +48,6 @@ export default function NewOrderPage() {
   }, [])
 
   function goBackToOrders(reason: 'cancel' | 'created') {
-    allowOrdersNavigationRef.current = true
     logNavigation(`before router.push('/admin/orders')`, { reason })
     router.push('/admin/orders')
   }
