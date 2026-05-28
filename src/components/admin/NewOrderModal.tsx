@@ -40,6 +40,9 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLElement | null
+    if (submitter?.dataset.action !== 'create-order') return
+
     if (!productType || !factoryId) {
       toast.error(locale === 'ar' ? 'يرجى اختيار نوع المنتج واختيار المصنع' : 'Please select a product type and factory')
       return
@@ -131,9 +134,25 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
     }
   }
 
+  function handleDesignImagesChange(e: React.ChangeEvent<HTMLInputElement>) {
+    e.preventDefault()
+    e.stopPropagation()
+    setDesignImages(Array.from(e.currentTarget.files || []))
+  }
+
+  function handleAttachmentsChange(e: React.ChangeEvent<HTMLInputElement>) {
+    e.preventDefault()
+    e.stopPropagation()
+    setAttachments(Array.from(e.currentTarget.files || []))
+  }
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
-      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[calc(100vh-2rem)] shadow-2xl animate-slide-up overflow-hidden">
+      <div
+        className="bg-white rounded-2xl w-full max-w-2xl max-h-[calc(100vh-2rem)] shadow-2xl animate-slide-up overflow-hidden"
+        onPointerDown={e => e.stopPropagation()}
+        onClick={e => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-stone-100">
           <div className="flex items-center gap-3">
@@ -142,7 +161,7 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
             </div>
             <h2 className="font-bold text-stone-900">{t('newOrder')}</h2>
           </div>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 transition-colors p-1">
+          <button type="button" onClick={onClose} className="text-stone-400 hover:text-stone-600 transition-colors p-1">
             <X size={20} />
           </button>
         </div>
@@ -298,18 +317,27 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
                 <ImageIcon size={16} className="text-stone-500" />
                 <label className="text-sm font-semibold text-stone-800">{locale === 'ar' ? 'صور التصميم / المنتج' : 'Design / Product Images'}</label>
               </div>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={e => setDesignImages(Array.from(e.target.files || []))}
-                className="block w-full text-sm text-stone-500 file:ml-3 file:border-0 file:rounded-lg file:bg-brand-500 file:text-white file:px-3 file:py-2 file:text-sm"
-              />
+              <div onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleDesignImagesChange}
+                  className="block w-full text-sm text-stone-500 file:ml-3 file:border-0 file:rounded-lg file:bg-brand-500 file:text-white file:px-3 file:py-2 file:text-sm"
+                />
+              </div>
               <p className="mt-2 text-xs text-stone-400">
                 {designImages.length
                   ? `${designImages.length} ${locale === 'ar' ? 'ملف محدد' : 'selected files'}`
                   : (locale === 'ar' ? 'الصورة هي المتطلب الأساسي للطلب' : 'The image is the main order requirement')}
               </p>
+              {designImages.length > 0 && (
+                <ul className="mt-2 space-y-1 text-xs text-stone-500">
+                  {designImages.map(file => (
+                    <li key={`${file.name}-${file.lastModified}`} className="truncate">{file.name}</li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             <div className="rounded-2xl bg-stone-50 border border-stone-200 p-4">
@@ -317,17 +345,26 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
                 <Paperclip size={16} className="text-stone-500" />
                 <label className="text-sm font-semibold text-stone-800">{locale === 'ar' ? 'مرفقات إضافية' : 'Additional Attachments'}</label>
               </div>
-              <input
-                type="file"
-                multiple
-                onChange={e => setAttachments(Array.from(e.target.files || []))}
-                className="block w-full text-sm text-stone-500 file:ml-3 file:border-0 file:rounded-lg file:bg-stone-700 file:text-white file:px-3 file:py-2 file:text-sm"
-              />
+              <div onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+                <input
+                  type="file"
+                  multiple
+                  onChange={handleAttachmentsChange}
+                  className="block w-full text-sm text-stone-500 file:ml-3 file:border-0 file:rounded-lg file:bg-stone-700 file:text-white file:px-3 file:py-2 file:text-sm"
+                />
+              </div>
               <p className="mt-2 text-xs text-stone-400">
                 {attachments.length
                   ? `${attachments.length} ${locale === 'ar' ? 'ملف محدد' : 'selected files'}`
                   : (locale === 'ar' ? 'صور، PDF، أو ملفات تنفيذ' : 'Images, PDF, or production files')}
               </p>
+              {attachments.length > 0 && (
+                <ul className="mt-2 space-y-1 text-xs text-stone-500">
+                  {attachments.map(file => (
+                    <li key={`${file.name}-${file.lastModified}`} className="truncate">{file.name}</li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
 
@@ -342,6 +379,7 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
             </button>
             <button
               type="submit"
+              data-action="create-order"
               disabled={saving}
               className="flex-1 py-2.5 bg-brand-500 hover:bg-brand-600 disabled:bg-brand-300
                 text-white text-sm font-semibold rounded-xl transition-all"
