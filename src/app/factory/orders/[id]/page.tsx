@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Order, OrderStatus } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
+import { UrgentBadge } from '@/components/shared/UrgentBadge'
 import { formatDate, formatDateTime } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import { getDetailEntries, getFactoryOrderType, getOrderStatusOptions, isImageAttachment } from '@/lib/orders'
@@ -101,6 +102,7 @@ export default function FactoryOrderDetail() {
             <div className="flex flex-wrap items-center gap-2 mb-1">
               <span className="font-mono text-xs text-stone-400">{order.order_number}</span>
               <StatusBadge status={order.status as OrderStatus} />
+              {order.is_urgent && <UrgentBadge />}
             </div>
             <h1 className="font-bold text-stone-900">{getFactoryOrderType(order.product_type, undefined, locale)}</h1>
           </div>

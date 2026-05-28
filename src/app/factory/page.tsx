@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Order, OrderStatus } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
+import { UrgentBadge } from '@/components/shared/UrgentBadge'
 import { formatDate } from '@/lib/utils'
 import {
   getFactoryOrderType,
@@ -170,6 +171,11 @@ export default function FactoryDashboard() {
                             <div className="min-w-0">
                               <p className="font-medium text-stone-900 truncate">{getFactoryOrderType(order.product_type, undefined, locale)}</p>
                               <p className="font-mono text-xs text-stone-400">{order.order_number}</p>
+                              {order.is_urgent && (
+                                <span className="mt-1 inline-flex">
+                                  <UrgentBadge size="sm" />
+                                </span>
+                              )}
                               {order.status === 'rework' && (
                                 <p className="mt-1 text-xs font-semibold text-orange-600">{t('returnedNotice')}</p>
                               )}
@@ -204,6 +210,7 @@ export default function FactoryDashboard() {
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-mono text-xs text-stone-400">{order.order_number}</span>
                       <StatusBadge status={order.status as OrderStatus} size="sm" />
+                      {order.is_urgent && <UrgentBadge size="sm" />}
                     </div>
                     <p className="font-medium text-stone-900 truncate">{getFactoryOrderType(order.product_type, undefined, locale)}</p>
                     {order.status === 'rework' && (

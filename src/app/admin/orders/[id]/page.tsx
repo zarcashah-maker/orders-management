@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Order, Factory, OrderStatus, AIChatMessage } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
+import { UrgentBadge } from '@/components/shared/UrgentBadge'
 import { formatDate, formatDateTime } from '@/lib/utils'
 import { getDetailEntries, getOrderStatusOptions, getProductTypeLabel, isImageAttachment } from '@/lib/orders'
 import {
@@ -21,6 +22,7 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [updatingUrgency, setUpdatingUrgency] = useState(false)
   const [messages, setMessages] = useState<AIChatMessage[]>([])
   const [input, setInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
@@ -72,6 +74,23 @@ export default function OrderDetailPage() {
       toast.success('تم تحديث الحالة')
     }
     setUpdatingStatus(false)
+  }
+
+  async function updateUrgency(isUrgent: boolean) {
+    if (!order) return
+    setUpdatingUrgency(true)
+    const { error } = await supabase
+      .from('orders')
+      .update({ is_urgent: isUrgent, updated_at: new Date().toISOString() })
+      .eq('id', order.id)
+
+    if (error) {
+      toast.error(t('urgentOrderUpdateFailed'))
+    } else {
+      setOrder({ ...order, is_urgent: isUrgent })
+      toast.success(t('urgentOrderUpdated'))
+    }
+    setUpdatingUrgency(false)
   }
 
   async function sendMessage() {
@@ -150,28 +169,41 @@ export default function OrderDetailPage() {
                 {order.order_number}
               </span>
               <StatusBadge status={order.status} />
+              {order.is_urgent && <UrgentBadge />}
             </div>
             <h1 className="text-xl font-display font-bold text-stone-900">{getProductTypeLabel(order.product_type, null, locale)}</h1>
           </div>
 
           {/* Status changer */}
-          <div className="relative">
-            <label className="block text-xs text-stone-400 mb-1">{t('status')}</label>
+          <div className="flex flex-wrap items-end gap-3">
             <div className="relative">
-              <select
-                value={order.status}
-                onChange={e => updateStatus(e.target.value as OrderStatus)}
-                disabled={updatingStatus}
-                className="px-3 py-2 pl-7 bg-stone-50 border border-stone-200 rounded-xl text-sm
-                  focus:outline-none focus:ring-2 focus:ring-brand-400 appearance-none cursor-pointer
-                  disabled:opacity-50"
-              >
-                {statusOptions.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
+              <label className="block text-xs text-stone-400 mb-1">{t('status')}</label>
+              <div className="relative">
+                <select
+                  value={order.status}
+                  onChange={e => updateStatus(e.target.value as OrderStatus)}
+                  disabled={updatingStatus}
+                  className="px-3 py-2 pl-7 bg-stone-50 border border-stone-200 rounded-xl text-sm
+                    focus:outline-none focus:ring-2 focus:ring-brand-400 appearance-none cursor-pointer
+                    disabled:opacity-50"
+                >
+                  {statusOptions.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
+              </div>
             </div>
+            <label className="inline-flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+              <input
+                type="checkbox"
+                checked={Boolean(order.is_urgent)}
+                onChange={e => updateUrgency(e.target.checked)}
+                disabled={updatingUrgency}
+                className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-400 disabled:opacity-40"
+              />
+              {t('urgentOrder')}
+            </label>
           </div>
         </div>
 

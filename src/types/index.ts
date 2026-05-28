@@ -54,6 +54,7 @@ export interface Order {
   due_date: string | null
   quantity: number | null
   general_notes: string | null
+  is_urgent: boolean
   archived: boolean
   created_at: string
   updated_at: string

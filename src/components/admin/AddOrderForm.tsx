@@ -9,7 +9,6 @@ import {
   getProductTypeOptions,
   isImageAttachment,
 } from '@/lib/orders'
-import { generateOrderNumber } from '@/lib/utils'
 import { usePreferences } from '@/lib/i18n'
 import { X, Package, Image as ImageIcon, Paperclip } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -56,6 +55,7 @@ type AddOrderDraft = {
   sallaOrderNumber: string
   customerPhone: string
   notes: string
+  isUrgent: boolean
   factoryId: string
   quantity: string
   dueDate: string
@@ -148,6 +148,7 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
   const [sallaOrderNumber, setSallaOrderNumber] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [notes, setNotes] = useState('')
+  const [isUrgent, setIsUrgent] = useState(false)
   const [designImages, setDesignImages] = useState<File[]>([])
   const [attachments, setAttachments] = useState<File[]>([])
   const [factoryId, setFactoryId] = useState(factories[0]?.id || '')
@@ -182,6 +183,7 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
           setSallaOrderNumber(draft.sallaOrderNumber || '')
           setCustomerPhone(draft.customerPhone || '')
           setNotes(draft.notes || '')
+          setIsUrgent(Boolean(draft.isUrgent))
           setFactoryId(draft.factoryId || factories[0]?.id || '')
           setQuantity(draft.quantity || '')
           setDueDate(draft.dueDate || '')
@@ -228,7 +230,7 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
     if (!draftRestored) return
     persistDraft()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftRestored, productType, details, sallaOrderNumber, customerPhone, notes, factoryId, quantity, dueDate])
+  }, [draftRestored, productType, details, sallaOrderNumber, customerPhone, notes, isUrgent, factoryId, quantity, dueDate])
 
   useEffect(() => {
     function handlePageShow(event: PageTransitionEvent) {
@@ -247,7 +249,7 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
       window.removeEventListener('pagehide', handlePageHide)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productType, details, sallaOrderNumber, customerPhone, notes, factoryId, quantity, dueDate])
+  }, [productType, details, sallaOrderNumber, customerPhone, notes, isUrgent, factoryId, quantity, dueDate])
 
   function persistDraft() {
     const draft: AddOrderDraft = {
@@ -256,6 +258,7 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
       sallaOrderNumber,
       customerPhone,
       notes,
+      isUrgent,
       factoryId,
       quantity,
       dueDate,
@@ -278,7 +281,6 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
 
     try {
       const orderDetails = buildOrderDetails()
-      const internalOrderNumber = generateOrderNumber()
       const currentDesignImages = designImagesRef.current
       const currentAttachments = attachmentsRef.current
       const files: PendingUpload[] = [
@@ -300,6 +302,7 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
       })
 
       uploadedFiles = await uploadOrderFiles(orderId, files)
+      const internalOrderNumber = await getNextInternalOrderNumber()
 
       const { error } = await supabase.from('orders').insert({
         id: orderId,
@@ -312,6 +315,7 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
         quantity: quantity ? parseInt(quantity) : 1,
         due_date: dueDate || null,
         general_notes: notes.trim() || null,
+        is_urgent: isUrgent,
         status: 'pending',
         created_by: profile?.id || null,
         order_date: new Date().toISOString().slice(0, 10),
@@ -385,6 +389,14 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
     })
 
     return result
+  }
+
+  async function getNextInternalOrderNumber() {
+    const { data, error } = await supabase.rpc('generate_internal_order_number')
+    if (error || !data) {
+      throw error || new Error('Could not generate internal order number')
+    }
+    return String(data)
   }
 
   async function uploadOrderFiles(orderId: string, files: PendingUpload[]) {
@@ -890,6 +902,16 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
             className="w-full px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
           />
         </div>
+
+        <label className="flex items-center gap-3 rounded-2xl border border-red-100 bg-red-50/70 px-4 py-3 text-sm font-semibold text-red-700">
+          <input
+            type="checkbox"
+            checked={isUrgent}
+            onChange={e => setIsUrgent(e.target.checked)}
+            className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-400"
+          />
+          {t('urgentOrder')}
+        </label>
 
         <div className="grid sm:grid-cols-2 gap-3">
           <div className="rounded-2xl bg-stone-50 border border-stone-200 p-4">

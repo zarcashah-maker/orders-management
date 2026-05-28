@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Order, Factory, OrderStatus } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
+import { UrgentBadge } from '@/components/shared/UrgentBadge'
 import { formatDate } from '@/lib/utils'
 import {
   getOrderThumbnail,
@@ -98,6 +99,11 @@ export default function AdminOrdersPage() {
             {getProductTypeLabel(order.product_type, null, locale)}
           </Link>
           <p className="text-xs text-stone-400 mt-0.5 font-mono">{order.order_number}</p>
+          {order.is_urgent && (
+            <span className="mt-1 inline-flex">
+              <UrgentBadge size="sm" />
+            </span>
+          )}
         </div>
       </div>
     )
@@ -232,6 +238,7 @@ export default function AdminOrdersPage() {
                               <p className="text-xs font-mono text-stone-400">{order.order_number}</p>
                             </div>
                           </div>
+                          {order.is_urgent && <div className="mt-2"><UrgentBadge size="sm" /></div>}
                           <p className="text-xs text-stone-400 mt-2">{(order.factory as unknown as Factory)?.name || (locale === 'ar' ? 'غير مسند' : 'Unassigned')}</p>
                         </Link>
                       ))}
@@ -260,9 +267,12 @@ export default function AdminOrdersPage() {
                 {filtered.map(order => (
                   <tr key={order.id} className="hover:bg-stone-50/80 transition-colors">
                     <td className="px-5 py-4">
-                      <span className="font-mono text-xs text-stone-500 bg-stone-100 px-2 py-1 rounded-lg">
-                        {order.order_number}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-xs text-stone-500 bg-stone-100 px-2 py-1 rounded-lg">
+                          {order.order_number}
+                        </span>
+                        {order.is_urgent && <UrgentBadge size="sm" />}
+                      </div>
                     </td>
                     <td className="px-5 py-4 text-sm text-stone-600 font-mono">
                       {order.salla_order_number || '—'}

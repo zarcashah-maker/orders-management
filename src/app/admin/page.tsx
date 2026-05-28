@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Order, Factory as FactoryType } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
+import { UrgentBadge } from '@/components/shared/UrgentBadge'
 import { formatDate } from '@/lib/utils'
 import { getOrderThumbnail, getProductTypeLabel } from '@/lib/orders'
 import { Package, Clock, CheckCircle, Factory, TrendingUp, ArrowLeft } from 'lucide-react'
@@ -148,6 +149,7 @@ export default function AdminDashboard() {
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="text-xs font-mono text-stone-400">{order.order_number}</span>
                     <StatusBadge status={order.status} size="sm" />
+                    {order.is_urgent && <UrgentBadge size="sm" />}
                   </div>
                   <p className="text-sm font-medium text-stone-800 truncate">{getProductTypeLabel(order.product_type, null, locale)}</p>
                   <p className="text-xs text-stone-400">
