@@ -70,19 +70,79 @@ type AttachmentDebugFile = {
   rejectionReason?: string
 }
 
-type AttachmentDebugState = {
+type AttachmentInputStrategy = 'pdfOnly' | 'allFiles' | 'multipleFiles'
+
+type AttachmentInputDebug = {
+  strategy: AttachmentInputStrategy
+  label: string
   lastEvent: string
   rawFilesLength: number
   acceptedCount: number
   rejectedCount: number
   files: AttachmentDebugFile[]
+  message: string
+}
+
+type AttachmentDebugState = {
+  lastEvent: string
+  lastStrategy: AttachmentInputStrategy | 'none' | 'restore' | 'create'
+  rawFilesLength: number
+  acceptedCount: number
+  rejectedCount: number
+  files: AttachmentDebugFile[]
+  selectedAttachmentsCount: number
   uploadPayloadAttachmentsCount: number
   uploadError: string
+  inputs: Record<AttachmentInputStrategy, AttachmentInputDebug>
+}
+
+const attachmentInputStrategies: Array<{ key: AttachmentInputStrategy; label: string }> = [
+  { key: 'pdfOnly', label: 'اختيار PDF من الملفات' },
+  { key: 'allFiles', label: 'اختيار ملف بدون فلترة' },
+  { key: 'multipleFiles', label: 'اختيار عدة مرفقات' },
+]
+
+const emptyFileReadMessage = 'لم يتمكن المتصفح من قراءة الملف، يرجى تجربة خيار اختيار ملف بدون فلترة أو استخدام مدير الملفات'
+
+function createAttachmentInputDebug(strategy: AttachmentInputStrategy): AttachmentInputDebug {
+  const label = attachmentInputStrategies.find(item => item.key === strategy)?.label || strategy
+  return {
+    strategy,
+    label,
+    lastEvent: 'none',
+    rawFilesLength: 0,
+    acceptedCount: 0,
+    rejectedCount: 0,
+    files: [],
+    message: '',
+  }
+}
+
+function createAttachmentDebugState(): AttachmentDebugState {
+  const inputs = attachmentInputStrategies.reduce((result, strategy) => {
+    result[strategy.key] = createAttachmentInputDebug(strategy.key)
+    return result
+  }, {} as Record<AttachmentInputStrategy, AttachmentInputDebug>)
+
+  return {
+    lastEvent: 'none',
+    lastStrategy: 'none',
+    rawFilesLength: 0,
+    acceptedCount: 0,
+    rejectedCount: 0,
+    files: [],
+    selectedAttachmentsCount: 0,
+    uploadPayloadAttachmentsCount: 0,
+    uploadError: '',
+    inputs,
+  }
 }
 
 export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' }: AddOrderFormProps) {
   const idPrefix = useId()
   const createInFlightRef = useRef(false)
+  const designImagesRef = useRef<File[]>([])
+  const attachmentsRef = useRef<File[]>([])
   const [productType, setProductType] = useState<ProductType | ''>('')
   const [details, setDetails] = useState<Record<string, string>>({})
   const [sallaOrderNumber, setSallaOrderNumber] = useState('')
@@ -95,15 +155,7 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
   const [dueDate, setDueDate] = useState('')
   const [saving, setSaving] = useState(false)
   const [draftRestored, setDraftRestored] = useState(false)
-  const [attachmentDebug, setAttachmentDebug] = useState<AttachmentDebugState>({
-    lastEvent: 'none',
-    rawFilesLength: 0,
-    acceptedCount: 0,
-    rejectedCount: 0,
-    files: [],
-    uploadPayloadAttachmentsCount: 0,
-    uploadError: '',
-  })
+  const [attachmentDebug, setAttachmentDebug] = useState<AttachmentDebugState>(() => createAttachmentDebugState())
   const supabase = createClient()
   const { profile } = useAuth()
   const { locale, t } = usePreferences()
@@ -139,10 +191,14 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
         if (cancelled) return
         const restoredDesignImages = files.filter(item => item.kind === 'designImages').map(item => ensureFile(item.file, item.name, item.type, item.lastModified))
         const restoredAttachments = files.filter(item => item.kind === 'attachments').map(item => ensureFile(item.file, item.name, item.type, item.lastModified))
-        if (restoredDesignImages.length > 0) setDesignImages(restoredDesignImages)
+        if (restoredDesignImages.length > 0) {
+          designImagesRef.current = restoredDesignImages
+          setDesignImages(restoredDesignImages)
+        }
         if (restoredAttachments.length > 0) {
+          attachmentsRef.current = restoredAttachments
           setAttachments(restoredAttachments)
-          updateAttachmentDebug('restore', restoredAttachments, restoredAttachments, [])
+          updateAttachmentDebug('restore', 'restore', restoredAttachments, restoredAttachments, [], restoredAttachments.length)
         }
         if (saved || files.length > 0) {
           logForm('restored add order draft', {
@@ -223,19 +279,24 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
     try {
       const orderDetails = buildOrderDetails()
       const internalOrderNumber = generateOrderNumber()
+      const currentDesignImages = designImagesRef.current
+      const currentAttachments = attachmentsRef.current
       const files: PendingUpload[] = [
-        ...designImages.map(file => ({ file, isDesignImage: true })),
-        ...attachments.map(file => ({ file, isDesignImage: false })),
+        ...currentDesignImages.map(file => ({ file, isDesignImage: true })),
+        ...currentAttachments.map(file => ({ file, isDesignImage: false })),
       ]
       setAttachmentDebug(current => ({
         ...current,
-        uploadPayloadAttachmentsCount: attachments.length,
+        lastEvent: 'create',
+        lastStrategy: 'create',
+        selectedAttachmentsCount: currentAttachments.length,
+        uploadPayloadAttachmentsCount: currentAttachments.length,
         uploadError: '',
       }))
       logForm('create clicked; upload payload prepared', {
-        designImages: designImages.length,
-        attachments: attachments.length,
-        files: getFileDebugInfo(attachments),
+        designImages: currentDesignImages.length,
+        attachments: currentAttachments.length,
+        files: getFileDebugInfo(currentAttachments),
       })
 
       uploadedFiles = await uploadOrderFiles(orderId, files)
@@ -526,25 +587,57 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
     }
   }
 
-  function updateAttachmentDebug(eventName: string, rawFiles: File[], accepted: File[], rejected: AttachmentDebugFile[]) {
+  function updateAttachmentDebug(
+    strategy: AttachmentInputStrategy | 'restore',
+    eventName: string,
+    rawFiles: File[],
+    accepted: File[],
+    rejected: AttachmentDebugFile[],
+    selectedCount = attachmentsRef.current.length,
+    message = ''
+  ) {
     const acceptedDebug = accepted.map(classifyAttachment)
-    setAttachmentDebug(current => ({
-      ...current,
-      lastEvent: eventName,
-      rawFilesLength: rawFiles.length,
-      acceptedCount: accepted.length,
-      rejectedCount: rejected.length,
-      files: [...acceptedDebug, ...rejected],
-    }))
+    const files = [...acceptedDebug, ...rejected]
+
+    setAttachmentDebug(current => {
+      const next: AttachmentDebugState = {
+        ...current,
+        lastEvent: eventName,
+        lastStrategy: strategy,
+        rawFilesLength: rawFiles.length,
+        acceptedCount: accepted.length,
+        rejectedCount: rejected.length,
+        files,
+        selectedAttachmentsCount: selectedCount,
+      }
+
+      if (strategy !== 'restore') {
+        next.inputs = {
+          ...current.inputs,
+          [strategy]: {
+            ...current.inputs[strategy],
+            lastEvent: eventName,
+            rawFilesLength: rawFiles.length,
+            acceptedCount: accepted.length,
+            rejectedCount: rejected.length,
+            files,
+            message,
+          },
+        }
+      }
+
+      return next
+    })
   }
 
-  function processAttachmentSelection(eventName: 'input' | 'change', input: HTMLInputElement) {
+  function processAttachmentSelection(strategy: AttachmentInputStrategy, eventName: 'input' | 'change', input: HTMLInputElement) {
     const rawFiles = Array.from(input.files || []).map(file => ensureFile(file))
     const classified = rawFiles.map(classifyAttachment)
     const acceptedFiles = rawFiles.filter((_, index) => classified[index].accepted)
     const rejectedFiles = classified.filter(file => !file.accepted)
 
     logForm(`attachment input ${eventName}`, {
+      strategy,
       rawFilesLength: rawFiles.length,
       accepted: acceptedFiles.length,
       rejected: rejectedFiles.length,
@@ -555,19 +648,37 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
       setAttachmentDebug(current => ({
         ...current,
         lastEvent: `${eventName} (empty ignored)`,
+        lastStrategy: strategy,
         rawFilesLength: 0,
+        acceptedCount: 0,
+        rejectedCount: 0,
+        files: [],
+        selectedAttachmentsCount: attachmentsRef.current.length,
+        inputs: {
+          ...current.inputs,
+          [strategy]: {
+            ...current.inputs[strategy],
+            lastEvent: eventName,
+            rawFilesLength: 0,
+            acceptedCount: 0,
+            rejectedCount: 0,
+            files: [],
+            message: emptyFileReadMessage,
+          },
+        },
       }))
       return
     }
 
-    const uniqueAccepted = Array.from(
-      new Map(acceptedFiles.map(file => [getFileKey(file), file])).values()
+    const nextAttachments = Array.from(
+      new Map([...attachmentsRef.current, ...acceptedFiles].map(file => [getFileKey(file), file])).values()
     )
 
-    setAttachments(uniqueAccepted)
-    updateAttachmentDebug(eventName, rawFiles, uniqueAccepted, rejectedFiles)
-    replaceDraftFiles('attachments', uniqueAccepted).catch(err => {
-      if (process.env.NODE_ENV === 'development') console.warn(`[add-order-form] could not persist attachment files from ${eventName}`, err)
+    attachmentsRef.current = nextAttachments
+    setAttachments(nextAttachments)
+    updateAttachmentDebug(strategy, eventName, rawFiles, acceptedFiles, rejectedFiles, nextAttachments.length)
+    replaceDraftFiles('attachments', nextAttachments).catch(err => {
+      if (process.env.NODE_ENV === 'development') console.warn(`[add-order-form] could not persist attachment files from ${strategy}/${eventName}`, err)
     })
   }
 
@@ -577,22 +688,23 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
       count: files.length,
       files: getFileDebugInfo(files),
     })
+    designImagesRef.current = files
     setDesignImages(files)
     replaceDraftFiles('designImages', files).catch(err => {
       if (process.env.NODE_ENV === 'development') console.warn('[add-order-form] could not persist image files', err)
     })
   }
 
-  function handleAttachmentsClick() {
-    logForm('attachment input clicked')
+  function handleAttachmentsClick(strategy: AttachmentInputStrategy) {
+    logForm('attachment input clicked', { strategy })
   }
 
-  function handleAttachmentsChange(e: React.ChangeEvent<HTMLInputElement>) {
-    processAttachmentSelection('change', e.currentTarget)
+  function handleAttachmentsChange(strategy: AttachmentInputStrategy, e: React.ChangeEvent<HTMLInputElement>) {
+    processAttachmentSelection(strategy, 'change', e.currentTarget)
   }
 
-  function handleAttachmentsInput(e: React.FormEvent<HTMLInputElement>) {
-    processAttachmentSelection('input', e.currentTarget)
+  function handleAttachmentsInput(strategy: AttachmentInputStrategy, e: React.FormEvent<HTMLInputElement>) {
+    processAttachmentSelection(strategy, 'input', e.currentTarget)
   }
 
   async function handleCancelClick() {
@@ -600,6 +712,8 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
     await clearDraft().catch(err => {
       if (process.env.NODE_ENV === 'development') console.warn('[add-order-form] could not clear draft on cancel', err)
     })
+    designImagesRef.current = []
+    attachmentsRef.current = []
     onCancel()
   }
 
@@ -813,22 +927,35 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
           <div className="rounded-2xl bg-stone-50 border border-stone-200 p-4">
             <div className="flex items-center gap-2 mb-2">
               <Paperclip size={16} className="text-stone-500" />
-              <label htmlFor={`${idPrefix}-attachments`} className="text-sm font-semibold text-stone-800">{locale === 'ar' ? 'مرفقات إضافية' : 'Additional Attachments'}</label>
+              <p className="text-sm font-semibold text-stone-800">{locale === 'ar' ? 'مرفقات إضافية' : 'Additional Attachments'}</p>
             </div>
-            <input
-              id={`${idPrefix}-attachments`}
-              type="file"
-              multiple
-              onClick={handleAttachmentsClick}
-              onInput={handleAttachmentsInput}
-              onChange={handleAttachmentsChange}
-              className={fileInputClass}
-            />
-            {!isPage && (
-              <label htmlFor={`${idPrefix}-attachments`} className="mt-0 inline-flex w-full cursor-pointer items-center justify-center rounded-xl bg-stone-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-stone-800">
-                {locale === 'ar' ? 'اختيار PDF / ملف' : 'Choose PDF / File'}
-              </label>
-            )}
+            <div className="space-y-3">
+              {attachmentInputStrategies.map(strategy => (
+                <div key={strategy.key} className="rounded-xl border border-stone-200 bg-white p-3">
+                  <label
+                    htmlFor={`${idPrefix}-attachments-${strategy.key}`}
+                    className="mb-2 block text-sm font-medium text-stone-700"
+                  >
+                    {strategy.label}
+                  </label>
+                  <input
+                    id={`${idPrefix}-attachments-${strategy.key}`}
+                    type="file"
+                    accept={strategy.key === 'pdfOnly' ? 'application/pdf,.pdf' : undefined}
+                    multiple={strategy.key === 'multipleFiles'}
+                    onClick={() => handleAttachmentsClick(strategy.key)}
+                    onInput={e => handleAttachmentsInput(strategy.key, e)}
+                    onChange={e => handleAttachmentsChange(strategy.key, e)}
+                    className={fileInputClass}
+                  />
+                  {!isPage && (
+                    <label htmlFor={`${idPrefix}-attachments-${strategy.key}`} className="mt-0 inline-flex w-full cursor-pointer items-center justify-center rounded-xl bg-stone-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-stone-800">
+                      {strategy.label}
+                    </label>
+                  )}
+                </div>
+              ))}
+            </div>
             <p className="mt-2 text-xs text-stone-400">
               {attachments.length
                 ? `${attachments.length} ${locale === 'ar' ? 'ملف محدد' : 'selected files'}`
@@ -848,13 +975,42 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
                 <p className="font-semibold">{locale === 'ar' ? 'تشخيص المرفقات المؤقت' : 'Temporary attachment debug'}</p>
                 <div className="mt-2 grid gap-1">
                   <p>{locale === 'ar' ? 'آخر حدث' : 'Last event'}: {attachmentDebug.lastEvent}</p>
+                  <p>{locale === 'ar' ? 'آخر خيار مستخدم' : 'Last input used'}: {attachmentDebug.lastStrategy}</p>
                   <p>{locale === 'ar' ? 'عدد الملفات من المتصفح' : 'Browser files length'}: {attachmentDebug.rawFilesLength}</p>
                   <p>{locale === 'ar' ? 'المقبولة' : 'Accepted'}: {attachmentDebug.acceptedCount}</p>
                   <p>{locale === 'ar' ? 'المرفوضة' : 'Rejected'}: {attachmentDebug.rejectedCount}</p>
+                  <p>{locale === 'ar' ? 'عدد المرفقات المختارة في الحالة' : 'Selected attachments in React state'}: {attachmentDebug.selectedAttachmentsCount}</p>
                   <p>{locale === 'ar' ? 'عدد المرفقات عند الحفظ' : 'Upload payload attachments'}: {attachmentDebug.uploadPayloadAttachmentsCount}</p>
                   {attachmentDebug.uploadError && (
                     <p className="text-red-700">{locale === 'ar' ? 'خطأ الرفع' : 'Upload error'}: {attachmentDebug.uploadError}</p>
                   )}
+                </div>
+                <div className="mt-3 space-y-2">
+                  {attachmentInputStrategies.map(strategy => {
+                    const result = attachmentDebug.inputs[strategy.key]
+                    return (
+                      <div key={strategy.key} className="rounded-lg border border-amber-200 bg-white/70 p-2">
+                        <p className="font-semibold">{result.label}</p>
+                        <div className="mt-1 grid gap-0.5">
+                          <p>{locale === 'ar' ? 'الحدث' : 'Event'}: {result.lastEvent}</p>
+                          <p>files.length: {result.rawFilesLength}</p>
+                          <p>{locale === 'ar' ? 'المقبولة' : 'Accepted'}: {result.acceptedCount}</p>
+                          <p>{locale === 'ar' ? 'المرفوضة' : 'Rejected'}: {result.rejectedCount}</p>
+                          {result.message && <p className="text-red-700">{result.message}</p>}
+                        </div>
+                        {result.files.length > 0 && (
+                          <ul className="mt-1 space-y-1">
+                            {result.files.map((file, index) => (
+                              <li key={`${strategy.key}-${file.name}-${file.size}-${index}`} className={file.accepted ? 'text-amber-900' : 'text-red-700'}>
+                                {file.accepted ? '✓' : '×'} {file.name} · {file.type} · {Math.ceil(file.size / 1024)} KB · {file.reason}
+                                {file.rejectionReason ? ` · ${file.rejectionReason}` : ''}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
                 {attachmentDebug.files.length > 0 && (
                   <ul className="mt-2 space-y-1">
