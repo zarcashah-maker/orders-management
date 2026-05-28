@@ -43,7 +43,10 @@ type DraftFileKind = 'designImages' | 'attachments'
 type StoredDraftFile = {
   id: string
   kind: DraftFileKind
-  file: File
+  file: File | Blob
+  name: string
+  type: string
+  lastModified: number
   savedAt: number
 }
 
@@ -56,6 +59,25 @@ type AddOrderDraft = {
   factoryId: string
   quantity: string
   dueDate: string
+}
+
+type AttachmentDebugFile = {
+  name: string
+  type: string
+  size: number
+  accepted: boolean
+  reason: string
+  rejectionReason?: string
+}
+
+type AttachmentDebugState = {
+  lastEvent: string
+  rawFilesLength: number
+  acceptedCount: number
+  rejectedCount: number
+  files: AttachmentDebugFile[]
+  uploadPayloadAttachmentsCount: number
+  uploadError: string
 }
 
 export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' }: AddOrderFormProps) {
@@ -73,6 +95,15 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
   const [dueDate, setDueDate] = useState('')
   const [saving, setSaving] = useState(false)
   const [draftRestored, setDraftRestored] = useState(false)
+  const [attachmentDebug, setAttachmentDebug] = useState<AttachmentDebugState>({
+    lastEvent: 'none',
+    rawFilesLength: 0,
+    acceptedCount: 0,
+    rejectedCount: 0,
+    files: [],
+    uploadPayloadAttachmentsCount: 0,
+    uploadError: '',
+  })
   const supabase = createClient()
   const { profile } = useAuth()
   const { locale, t } = usePreferences()
@@ -106,10 +137,13 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
 
         const files = await readDraftFiles()
         if (cancelled) return
-        const restoredDesignImages = files.filter(item => item.kind === 'designImages').map(item => item.file)
-        const restoredAttachments = files.filter(item => item.kind === 'attachments').map(item => item.file)
+        const restoredDesignImages = files.filter(item => item.kind === 'designImages').map(item => ensureFile(item.file, item.name, item.type, item.lastModified))
+        const restoredAttachments = files.filter(item => item.kind === 'attachments').map(item => ensureFile(item.file, item.name, item.type, item.lastModified))
         if (restoredDesignImages.length > 0) setDesignImages(restoredDesignImages)
-        if (restoredAttachments.length > 0) setAttachments(restoredAttachments)
+        if (restoredAttachments.length > 0) {
+          setAttachments(restoredAttachments)
+          updateAttachmentDebug('restore', restoredAttachments, restoredAttachments, [])
+        }
         if (saved || files.length > 0) {
           logForm('restored add order draft', {
             hasFields: Boolean(saved),
@@ -193,6 +227,16 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
         ...designImages.map(file => ({ file, isDesignImage: true })),
         ...attachments.map(file => ({ file, isDesignImage: false })),
       ]
+      setAttachmentDebug(current => ({
+        ...current,
+        uploadPayloadAttachmentsCount: attachments.length,
+        uploadError: '',
+      }))
+      logForm('create clicked; upload payload prepared', {
+        designImages: designImages.length,
+        attachments: attachments.length,
+        files: getFileDebugInfo(attachments),
+      })
 
       uploadedFiles = await uploadOrderFiles(orderId, files)
 
@@ -250,6 +294,11 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
       })
       onCreated()
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setAttachmentDebug(current => ({
+        ...current,
+        uploadError: message,
+      }))
       if (process.env.NODE_ENV === 'development') {
         console.error('Create order error:', err)
       }
@@ -374,6 +423,9 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
             id: `${kind}-${file.name}-${file.size}-${file.lastModified}`,
             kind,
             file,
+            name: file.name,
+            type: file.type || 'application/octet-stream',
+            lastModified: file.lastModified,
             savedAt: Date.now(),
           } satisfies StoredDraftFile)
         })
@@ -435,6 +487,90 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
     }))
   }
 
+  function ensureFile(file: File | Blob, fallbackName = 'restored-attachment', fallbackType?: string, fallbackLastModified?: number): File {
+    if (file instanceof File) return file
+    return new File([file], fallbackName, {
+      type: file.type || fallbackType || 'application/octet-stream',
+      lastModified: fallbackLastModified,
+    })
+  }
+
+  function getFileKey(file: File) {
+    return `${file.name}-${file.size}-${file.lastModified}-${file.type || 'unknown'}`
+  }
+
+  function classifyAttachment(file: File): AttachmentDebugFile {
+    const name = file.name || ''
+    const lowerName = name.toLowerCase()
+    const type = file.type || ''
+    const isPdf = type === 'application/pdf' || lowerName.endsWith('.pdf')
+    const isImage = type.startsWith('image/') || /\.(png|jpe?g|webp|gif|svg|heic|heif)$/i.test(name)
+
+    if (!name && file.size === 0) {
+      return {
+        name: '(no name)',
+        type: type || '(empty)',
+        size: file.size,
+        accepted: false,
+        reason: 'rejected',
+        rejectionReason: 'empty file object',
+      }
+    }
+
+    return {
+      name: name || '(unnamed file)',
+      type: type || '(empty)',
+      size: file.size,
+      accepted: true,
+      reason: isPdf ? (type === 'application/pdf' ? 'pdf MIME type' : 'pdf filename extension') : isImage ? 'image file' : 'other attachment file',
+    }
+  }
+
+  function updateAttachmentDebug(eventName: string, rawFiles: File[], accepted: File[], rejected: AttachmentDebugFile[]) {
+    const acceptedDebug = accepted.map(classifyAttachment)
+    setAttachmentDebug(current => ({
+      ...current,
+      lastEvent: eventName,
+      rawFilesLength: rawFiles.length,
+      acceptedCount: accepted.length,
+      rejectedCount: rejected.length,
+      files: [...acceptedDebug, ...rejected],
+    }))
+  }
+
+  function processAttachmentSelection(eventName: 'input' | 'change', input: HTMLInputElement) {
+    const rawFiles = Array.from(input.files || []).map(file => ensureFile(file))
+    const classified = rawFiles.map(classifyAttachment)
+    const acceptedFiles = rawFiles.filter((_, index) => classified[index].accepted)
+    const rejectedFiles = classified.filter(file => !file.accepted)
+
+    logForm(`attachment input ${eventName}`, {
+      rawFilesLength: rawFiles.length,
+      accepted: acceptedFiles.length,
+      rejected: rejectedFiles.length,
+      files: classified,
+    })
+
+    if (rawFiles.length === 0) {
+      setAttachmentDebug(current => ({
+        ...current,
+        lastEvent: `${eventName} (empty ignored)`,
+        rawFilesLength: 0,
+      }))
+      return
+    }
+
+    const uniqueAccepted = Array.from(
+      new Map(acceptedFiles.map(file => [getFileKey(file), file])).values()
+    )
+
+    setAttachments(uniqueAccepted)
+    updateAttachmentDebug(eventName, rawFiles, uniqueAccepted, rejectedFiles)
+    replaceDraftFiles('attachments', uniqueAccepted).catch(err => {
+      if (process.env.NODE_ENV === 'development') console.warn(`[add-order-form] could not persist attachment files from ${eventName}`, err)
+    })
+  }
+
   function handleDesignImagesChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.currentTarget.files || [])
     logForm('image input onChange', {
@@ -452,29 +588,11 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
   }
 
   function handleAttachmentsChange(e: React.ChangeEvent<HTMLInputElement>) {
-    logForm('attachment input onChange start')
-    const files = Array.from(e.currentTarget.files || [])
-    logForm('attachment input selected files', {
-      count: files.length,
-      files: getFileDebugInfo(files),
-    })
-    setAttachments(files)
-    replaceDraftFiles('attachments', files).catch(err => {
-      if (process.env.NODE_ENV === 'development') console.warn('[add-order-form] could not persist attachment files', err)
-    })
+    processAttachmentSelection('change', e.currentTarget)
   }
 
   function handleAttachmentsInput(e: React.FormEvent<HTMLInputElement>) {
-    const files = Array.from(e.currentTarget.files || [])
-    if (files.length === 0) return
-    logForm('attachment input onInput', {
-      count: files.length,
-      files: getFileDebugInfo(files),
-    })
-    setAttachments(files)
-    replaceDraftFiles('attachments', files).catch(err => {
-      if (process.env.NODE_ENV === 'development') console.warn('[add-order-form] could not persist attachment files from input', err)
-    })
+    processAttachmentSelection('input', e.currentTarget)
   }
 
   async function handleCancelClick() {
@@ -724,6 +842,31 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
                   </li>
                 ))}
               </ul>
+            )}
+            {isPage && (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                <p className="font-semibold">{locale === 'ar' ? 'تشخيص المرفقات المؤقت' : 'Temporary attachment debug'}</p>
+                <div className="mt-2 grid gap-1">
+                  <p>{locale === 'ar' ? 'آخر حدث' : 'Last event'}: {attachmentDebug.lastEvent}</p>
+                  <p>{locale === 'ar' ? 'عدد الملفات من المتصفح' : 'Browser files length'}: {attachmentDebug.rawFilesLength}</p>
+                  <p>{locale === 'ar' ? 'المقبولة' : 'Accepted'}: {attachmentDebug.acceptedCount}</p>
+                  <p>{locale === 'ar' ? 'المرفوضة' : 'Rejected'}: {attachmentDebug.rejectedCount}</p>
+                  <p>{locale === 'ar' ? 'عدد المرفقات عند الحفظ' : 'Upload payload attachments'}: {attachmentDebug.uploadPayloadAttachmentsCount}</p>
+                  {attachmentDebug.uploadError && (
+                    <p className="text-red-700">{locale === 'ar' ? 'خطأ الرفع' : 'Upload error'}: {attachmentDebug.uploadError}</p>
+                  )}
+                </div>
+                {attachmentDebug.files.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {attachmentDebug.files.map((file, index) => (
+                      <li key={`${file.name}-${file.size}-${index}`} className={file.accepted ? 'text-amber-900' : 'text-red-700'}>
+                        {file.accepted ? '✓' : '×'} {file.name} · {file.type} · {Math.ceil(file.size / 1024)} KB · {file.reason}
+                        {file.rejectionReason ? ` · ${file.rejectionReason}` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
           </div>
         </div>
