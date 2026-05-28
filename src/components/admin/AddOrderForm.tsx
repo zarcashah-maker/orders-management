@@ -54,6 +54,12 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
   const productTypeOptions = getProductTypeOptions(locale)
   const isPage = variant === 'page'
 
+  function logForm(message: string, data?: Record<string, unknown>) {
+    if (process.env.NODE_ENV === 'development') {
+      console.info(`[add-order-form] ${message}`, data || {})
+    }
+  }
+
   async function handleCreate() {
     if (createInFlightRef.current || saving) return
     if (!productType || !factoryId) {
@@ -125,6 +131,7 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
       }
 
       toast.success(locale === 'ar' ? 'تم إنشاء الطلب بنجاح' : 'Order created successfully')
+      logForm('order created successfully; calling onCreated')
       onCreated()
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
@@ -217,6 +224,43 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
     })
   }
 
+  function getFileDebugInfo(files: File[]) {
+    return files.map(file => ({
+      name: file.name,
+      type: file.type || '(empty)',
+      size: file.size,
+      lastModified: file.lastModified,
+    }))
+  }
+
+  function handleDesignImagesChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.currentTarget.files || [])
+    logForm('image input onChange', {
+      count: files.length,
+      files: getFileDebugInfo(files),
+    })
+    setDesignImages(files)
+  }
+
+  function handleAttachmentsClick() {
+    logForm('attachment input clicked')
+  }
+
+  function handleAttachmentsChange(e: React.ChangeEvent<HTMLInputElement>) {
+    logForm('attachment input onChange start')
+    const files = Array.from(e.currentTarget.files || [])
+    logForm('attachment input selected files', {
+      count: files.length,
+      files: getFileDebugInfo(files),
+    })
+    setAttachments(files)
+  }
+
+  function handleCancelClick() {
+    logForm('cancel clicked; calling onCancel')
+    onCancel()
+  }
+
   function getDetailField(key: string) {
     if (!productType) return undefined
     return PRODUCT_DETAIL_FIELDS_BY_LOCALE[locale][productType].find(field => field.key === key)
@@ -241,7 +285,7 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
           </div>
           <h2 className="font-bold text-stone-900">{t('newOrder')}</h2>
         </div>
-        <button type="button" onClick={onCancel} disabled={saving} className="text-stone-400 hover:text-stone-600 disabled:opacity-40 transition-colors p-1">
+        <button type="button" onClick={handleCancelClick} disabled={saving} className="text-stone-400 hover:text-stone-600 disabled:opacity-40 transition-colors p-1">
           <X size={20} />
         </button>
       </div>
@@ -402,7 +446,7 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
               type="file"
               accept="image/*"
               multiple
-              onChange={e => setDesignImages(Array.from(e.currentTarget.files || []))}
+              onChange={handleDesignImagesChange}
               className={fileInputClass.replace('bg-stone-700', 'bg-brand-500')}
             />
             {!isPage && (
@@ -432,9 +476,9 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
             <input
               id={`${idPrefix}-attachments`}
               type="file"
-              accept=".pdf,application/pdf,image/*"
               multiple
-              onChange={e => setAttachments(Array.from(e.currentTarget.files || []))}
+              onClick={handleAttachmentsClick}
+              onChange={handleAttachmentsChange}
               className={fileInputClass}
             />
             {!isPage && (
@@ -450,7 +494,9 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
             {attachments.length > 0 && (
               <ul className="mt-2 space-y-1 text-xs text-stone-500">
                 {attachments.map(file => (
-                  <li key={`${file.name}-${file.lastModified}`} className="truncate">{file.name}</li>
+                  <li key={`${file.name}-${file.lastModified}`} className="truncate">
+                    {file.name} · {file.type || 'unknown'} · {Math.ceil(file.size / 1024)} KB
+                  </li>
                 ))}
               </ul>
             )}
@@ -460,7 +506,7 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
         <div className={isPage ? 'flex gap-3 pt-2' : 'sticky bottom-0 -mx-4 flex gap-3 border-t border-stone-100 bg-white px-4 pt-3 sm:-mx-5 sm:px-5'}>
           <button
             type="button"
-            onClick={onCancel}
+            onClick={handleCancelClick}
             disabled={saving}
             className="flex-1 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-sm font-medium rounded-xl transition-all"
           >

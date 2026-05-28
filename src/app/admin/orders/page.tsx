@@ -13,7 +13,6 @@ import {
 } from '@/lib/orders'
 import { Plus, Search, Filter, Package, LayoutGrid, List, Trash2 } from 'lucide-react'
 import Link from 'next/link'
-import { NewOrderModal } from '@/components/admin/NewOrderModal'
 import { usePreferences } from '@/lib/i18n'
 import toast from 'react-hot-toast'
 
@@ -26,7 +25,6 @@ export default function AdminOrdersPage() {
   const [factoryFilter, setFactoryFilter] = useState('')
   const [productFilter, setProductFilter] = useState('')
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list')
-  const [showNewOrder, setShowNewOrder] = useState(false)
   const supabase = useMemo(() => createClient(), [])
   const { locale, t } = usePreferences()
   const statusOptions = getOrderStatusOptions(locale)
@@ -117,20 +115,11 @@ export default function AdminOrdersPage() {
           href="/admin/orders/new"
           className="flex items-center gap-2 px-4 py-2.5 bg-brand-500 hover:bg-brand-600
             text-white text-sm font-semibold rounded-xl transition-all
-            shadow-md shadow-brand-500/25 hover:shadow-lg hover:shadow-brand-500/30 hover:-translate-y-0.5 lg:hidden"
+            shadow-md shadow-brand-500/25 hover:shadow-lg hover:shadow-brand-500/30 hover:-translate-y-0.5"
         >
           <Plus size={18} />
           <span className="hidden sm:block">{t('newOrder')}</span>
         </Link>
-        <button
-          onClick={() => setShowNewOrder(true)}
-          className="hidden items-center gap-2 px-4 py-2.5 bg-brand-500 hover:bg-brand-600
-            text-white text-sm font-semibold rounded-xl transition-all
-            shadow-md shadow-brand-500/25 hover:shadow-lg hover:shadow-brand-500/30 hover:-translate-y-0.5 lg:flex"
-        >
-          <Plus size={18} />
-          <span className="hidden sm:block">{t('newOrder')}</span>
-        </button>
       </div>
 
       {/* Filters */}
@@ -310,15 +299,6 @@ export default function AdminOrdersPage() {
           </div>
         )}
       </div>
-
-      {/* New Order Modal */}
-      {showNewOrder && (
-        <NewOrderModal
-          factories={factories}
-          onClose={() => setShowNewOrder(false)}
-          onCreated={() => { setShowNewOrder(false); loadOrders() }}
-        />
-      )}
     </div>
   )
 }
