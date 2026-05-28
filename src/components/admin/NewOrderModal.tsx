@@ -250,14 +250,17 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
+    <div
+      className="fixed inset-0 z-50 flex items-stretch justify-stretch bg-white p-0 lg:items-center lg:justify-center lg:bg-black/50 lg:p-4 lg:backdrop-blur-sm"
+      dir={locale === 'ar' ? 'rtl' : 'ltr'}
+    >
       <div
-        className="bg-white rounded-2xl w-full max-w-2xl max-h-[calc(100vh-2rem)] shadow-2xl animate-slide-up overflow-hidden"
+        className="flex h-screen h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-none lg:h-auto lg:max-h-[calc(100vh-2rem)] lg:max-w-2xl lg:rounded-2xl lg:shadow-2xl lg:animate-slide-up"
         onPointerDown={e => e.stopPropagation()}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-stone-100">
+        <div className="flex shrink-0 items-center justify-between border-b border-stone-100 p-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:p-5 sm:pt-[calc(1.25rem+env(safe-area-inset-top))] lg:pt-5">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-brand-500 rounded-xl flex items-center justify-center">
               <Package size={18} className="text-white" />
@@ -270,7 +273,7 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
         </div>
 
         {/* Form */}
-        <div className="p-5 space-y-4 overflow-y-auto overscroll-contain max-h-[calc(100vh-6.5rem)] [-webkit-overflow-scrolling:touch]">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch] sm:p-5 sm:pb-[calc(1.25rem+env(safe-area-inset-bottom))] lg:max-h-[calc(100vh-6.5rem)] lg:flex-none lg:pb-5">
           {/* Product type */}
           <div>
             <label className="block text-sm font-medium text-stone-700 mb-1.5">{t('productType')} *</label>
@@ -504,7 +507,7 @@ export function NewOrderModal({ factories, onClose, onCreated }: Props) {
           </div>
 
           {/* Actions */}
-          <div className="flex gap-3 pt-2">
+          <div className="sticky bottom-0 -mx-4 flex gap-3 border-t border-stone-100 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 sm:-mx-5 sm:px-5">
             <button
               type="button"
               onClick={requestClose}
