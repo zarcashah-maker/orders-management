@@ -25,6 +25,14 @@ export function formatDateTime(date: string | null | undefined): string {
   }).format(new Date(date))
 }
 
+export function formatCurrencySar(amount: number | string | null | undefined): string {
+  const value = Number(amount || 0)
+  return `${new Intl.NumberFormat('ar-SA', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: value % 1 === 0 ? 0 : 2,
+  }).format(value)} ريال`
+}
+
 export function generateOrderNumber(): string {
   const now = new Date()
   const year = now.getFullYear().toString().slice(-2)

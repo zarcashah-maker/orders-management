@@ -18,6 +18,9 @@ export type ProductType =
   | 'tshirt'
   | 'other'
 
+export type FactoryCostStatus = 'pending' | 'approved' | 'paid'
+export type FactoryInvoiceStatus = 'pending' | 'approved' | 'paid'
+
 export interface Profile {
   id: string
   name: string
@@ -55,6 +58,10 @@ export interface Order {
   quantity: number | null
   general_notes: string | null
   is_urgent: boolean
+  factory_cost: number | null
+  factory_cost_note: string | null
+  factory_cost_status: FactoryCostStatus
+  factory_invoice_id: string | null
   archived: boolean
   created_at: string
   updated_at: string
@@ -62,6 +69,24 @@ export interface Order {
   images?: OrderImage[]
   attachments?: Attachment[]
   creator?: Profile
+  factory_invoice?: FactoryInvoice
+}
+
+export interface FactoryInvoice {
+  id: string
+  invoice_number: string
+  factory_id: string
+  total_amount: number
+  order_count: number
+  status: FactoryInvoiceStatus
+  receipt_url: string | null
+  receipt_file_name: string | null
+  receipt_storage_path: string | null
+  paid_at: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  factory?: Factory
 }
 
 export interface OrderImage {

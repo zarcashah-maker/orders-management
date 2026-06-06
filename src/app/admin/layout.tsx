@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Package,
   Factory,
+  ReceiptText,
   ChevronLeft,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -24,6 +25,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: '/admin', label: t('home'), icon: LayoutDashboard, exact: true },
     { href: '/admin/orders', label: t('orders'), icon: Package, exact: false },
     { href: '/admin/factories', label: t('factories'), icon: Factory, exact: false },
+    { href: '/admin/factory-invoices', label: t('factoryInvoices'), icon: ReceiptText, exact: false },
   ]
 
   useEffect(() => {

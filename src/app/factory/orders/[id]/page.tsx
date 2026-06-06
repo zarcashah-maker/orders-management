@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { Order, OrderStatus } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { UrgentBadge } from '@/components/shared/UrgentBadge'
-import { formatDate, formatDateTime } from '@/lib/utils'
+import { formatCurrencySar, formatDate, formatDateTime } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import { getDetailEntries, getFactoryOrderType, getOrderStatusOptions, isImageAttachment } from '@/lib/orders'
 import {
@@ -21,6 +21,9 @@ export default function FactoryOrderDetail() {
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [savingCost, setSavingCost] = useState(false)
+  const [factoryCost, setFactoryCost] = useState('')
+  const [factoryCostNote, setFactoryCostNote] = useState('')
   const { profile } = useAuth()
   const { locale, t } = usePreferences()
   const supabase = createClient()
@@ -33,8 +36,10 @@ export default function FactoryOrderDetail() {
         .select('*, images:order_images(*), attachments(*)')
         .eq('id', id)
         .eq('assigned_factory_id', profile?.factory_id || '')
-        .single()
+      .single()
       setOrder(data)
+      setFactoryCost(data?.factory_cost ? String(data.factory_cost) : '')
+      setFactoryCostNote(data?.factory_cost_note || '')
       setLoading(false)
     }
     if (id && profile?.factory_id) load()
@@ -67,6 +72,36 @@ export default function FactoryOrderDetail() {
     setUpdatingStatus(false)
   }
 
+  async function saveFactoryCost() {
+    if (!order || order.factory_cost_status !== 'pending') return
+    const parsedCost = Number(factoryCost)
+    if (!Number.isFinite(parsedCost) || parsedCost < 0) {
+      toast.error(locale === 'ar' ? 'يرجى إدخال تكلفة صحيحة' : 'Please enter a valid cost')
+      return
+    }
+
+    setSavingCost(true)
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        factory_cost: parsedCost,
+        factory_cost_note: factoryCostNote.trim() || null,
+        factory_cost_status: 'pending',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', order.id)
+      .eq('assigned_factory_id', profile?.factory_id || '')
+      .eq('factory_cost_status', 'pending')
+
+    if (error) {
+      toast.error(t('costSaveFailed'))
+    } else {
+      setOrder({ ...order, factory_cost: parsedCost, factory_cost_note: factoryCostNote.trim() || null, factory_cost_status: 'pending' })
+      toast.success(t('costSaved'))
+    }
+    setSavingCost(false)
+  }
+
   if (loading) return (
     <div className="space-y-4">
       <div className="h-8 w-48 skeleton rounded-xl" />
@@ -84,6 +119,7 @@ export default function FactoryOrderDetail() {
   const detailEntries = getDetailEntries(order.product_type, order.details, locale)
   const imageAttachments = (order.attachments || []).filter(isImageAttachment)
   const otherAttachments = (order.attachments || []).filter(attachment => !isImageAttachment(attachment))
+  const canEditCost = order.status === 'completed' && order.factory_cost_status === 'pending'
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -166,6 +202,55 @@ export default function FactoryOrderDetail() {
         <p className="text-xs text-stone-400 mt-4">
           {t('createdAt')}: {formatDateTime(order.created_at)}
         </p>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-stone-200/60 shadow-sm p-5">
+        <h2 className="font-bold text-stone-900 text-sm mb-3">{t('executionCost')}</h2>
+        {order.factory_cost_status !== 'pending' && (
+          <div className="mb-3 rounded-xl border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-700">
+            {t('factoryCostApproved')}: {formatCurrencySar(order.factory_cost)}
+          </div>
+        )}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="block text-xs text-stone-400 mb-1">{t('executionCost')}</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={factoryCost}
+              onChange={e => setFactoryCost(e.target.value)}
+              disabled={!canEditCost || savingCost}
+              className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:opacity-60"
+              dir="ltr"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-stone-400 mb-1">{t('costNote')}</label>
+            <input
+              type="text"
+              value={factoryCostNote}
+              onChange={e => setFactoryCostNote(e.target.value)}
+              disabled={!canEditCost || savingCost}
+              className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:opacity-60"
+            />
+          </div>
+        </div>
+        {order.status !== 'completed' && (
+          <p className="mt-2 text-xs text-stone-400">
+            {locale === 'ar' ? 'تظهر التكلفة بعد اكتمال الطلب.' : 'Cost can be entered after the order is completed.'}
+          </p>
+        )}
+        {canEditCost && (
+          <button
+            type="button"
+            onClick={saveFactoryCost}
+            disabled={savingCost}
+            className="mt-3 rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:bg-brand-300"
+          >
+            {savingCost ? t('saving') : t('saveCost')}
+          </button>
+        )}
       </div>
 
       {/* Notes */}

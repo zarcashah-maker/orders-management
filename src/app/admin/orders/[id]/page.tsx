@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { Order, Factory, OrderStatus, AIChatMessage } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { UrgentBadge } from '@/components/shared/UrgentBadge'
-import { formatDate, formatDateTime } from '@/lib/utils'
+import { formatCurrencySar, formatDate, formatDateTime } from '@/lib/utils'
 import { getDetailEntries, getOrderStatusOptions, getProductTypeLabel, isImageAttachment } from '@/lib/orders'
 import {
   ArrowRight, Sparkles, Send, ChevronDown,
@@ -23,6 +23,9 @@ export default function OrderDetailPage() {
   const [loading, setLoading] = useState(true)
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [updatingUrgency, setUpdatingUrgency] = useState(false)
+  const [savingCost, setSavingCost] = useState(false)
+  const [factoryCost, setFactoryCost] = useState('')
+  const [factoryCostNote, setFactoryCostNote] = useState('')
   const [messages, setMessages] = useState<AIChatMessage[]>([])
   const [input, setInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
@@ -40,6 +43,8 @@ export default function OrderDetailPage() {
         .eq('id', id)
         .single()
       setOrder(data)
+      setFactoryCost(data?.factory_cost ? String(data.factory_cost) : '')
+      setFactoryCostNote(data?.factory_cost_note || '')
       setLoading(false)
     }
     if (id) load()
@@ -91,6 +96,34 @@ export default function OrderDetailPage() {
       toast.success(t('urgentOrderUpdated'))
     }
     setUpdatingUrgency(false)
+  }
+
+  async function saveFactoryCost() {
+    if (!order) return
+    const parsedCost = factoryCost.trim() === '' ? null : Number(factoryCost)
+    if (parsedCost !== null && (!Number.isFinite(parsedCost) || parsedCost < 0)) {
+      toast.error(locale === 'ar' ? 'يرجى إدخال تكلفة صحيحة' : 'Please enter a valid cost')
+      return
+    }
+
+    setSavingCost(true)
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        factory_cost: parsedCost,
+        factory_cost_note: factoryCostNote.trim() || null,
+        factory_cost_status: parsedCost === null ? 'pending' : order.factory_cost_status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', order.id)
+
+    if (error) {
+      toast.error(t('costSaveFailed'))
+    } else {
+      setOrder({ ...order, factory_cost: parsedCost, factory_cost_note: factoryCostNote.trim() || null })
+      toast.success(t('costSaved'))
+    }
+    setSavingCost(false)
   }
 
   async function sendMessage() {
@@ -281,6 +314,49 @@ export default function OrderDetailPage() {
             </div>
           </div>
         )}
+
+        <div className="mt-5 pt-5 border-t border-stone-100">
+          <p className="text-sm font-bold text-stone-900 mb-3">{t('executionCost')}</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs text-stone-400 mb-1">{t('executionCost')}</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={factoryCost}
+                onChange={e => setFactoryCost(e.target.value)}
+                disabled={savingCost}
+                className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:opacity-60"
+                dir="ltr"
+              />
+              <p className="mt-1 text-xs text-stone-400">{formatCurrencySar(order.factory_cost)}</p>
+            </div>
+            <div>
+              <label className="block text-xs text-stone-400 mb-1">{t('costNote')}</label>
+              <input
+                type="text"
+                value={factoryCostNote}
+                onChange={e => setFactoryCostNote(e.target.value)}
+                disabled={savingCost}
+                className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:opacity-60"
+              />
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={saveFactoryCost}
+              disabled={savingCost}
+              className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:bg-brand-300"
+            >
+              {savingCost ? t('saving') : t('saveCost')}
+            </button>
+            <span className="text-xs font-medium text-stone-400">
+              {order.factory_cost_status === 'paid' ? t('paid') : order.factory_cost_status === 'approved' ? t('approved') : t('pendingCosts')}
+            </span>
+          </div>
+        </div>
 
         {order.general_notes && (
           <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-xl">
