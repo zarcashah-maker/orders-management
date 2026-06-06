@@ -10,7 +10,7 @@ import { formatDate, formatDateTime } from '@/lib/utils'
 import { getDetailEntries, getOrderStatusOptions, getProductTypeLabel, isImageAttachment } from '@/lib/orders'
 import {
   ArrowRight, Sparkles, Send, ChevronDown,
-  Package, Calendar, Hash, Building2, FileDown, Image as ImageIcon, Phone
+  Package, Calendar, Hash, Building2, FileDown, Image as ImageIcon, Phone, Edit
 } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
@@ -176,6 +176,15 @@ export default function OrderDetailPage() {
 
           {/* Status changer */}
           <div className="flex flex-wrap items-end gap-3">
+            {profile?.role === 'Admin' && (
+              <Link
+                href={`/admin/orders/${order.id}/edit`}
+                className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600"
+              >
+                <Edit size={15} />
+                {t('edit')}
+              </Link>
+            )}
             <div className="relative">
               <label className="block text-xs text-stone-400 mb-1">{t('status')}</label>
               <div className="relative">
