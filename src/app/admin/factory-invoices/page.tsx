@@ -98,10 +98,6 @@ export default function AdminFactoryInvoicesPage() {
       toast.error(locale === 'ar' ? 'اختر طلبات مصنع واحد فقط لكل فاتورة' : 'Select orders from one factory per invoice')
       return
     }
-    if (selectedOrders.some(order => order.status !== 'completed')) {
-      toast.error(t('completeBeforeApproval'))
-      return
-    }
 
     setApproving(true)
     let uploadedReceipt: Awaited<ReturnType<typeof uploadReceipt>> | null = null
