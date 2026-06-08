@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase'
 import { Order, OrderStatus } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { UrgentBadge } from '@/components/shared/UrgentBadge'
+import { ExecutionTypeBadge } from '@/components/shared/ExecutionTypeBadge'
+import { DesignLink } from '@/components/shared/DesignLink'
 import { formatCurrencySar, formatDate, formatDateTime } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import { getDetailEntries, getFactoryOrderType, getOrderStatusOptions, isImageAttachment } from '@/lib/orders'
@@ -153,6 +155,7 @@ export default function FactoryOrderDetail() {
             <div className="flex flex-wrap items-center gap-2 mb-1">
               <span className="font-mono text-xs text-stone-400">{order.order_number}</span>
               <StatusBadge status={order.status as OrderStatus} />
+              <ExecutionTypeBadge executionType={order.execution_type} />
               {order.is_urgent && <UrgentBadge />}
             </div>
             <h1 className="font-bold text-stone-900">{getFactoryOrderType(order.product_type, undefined, locale)}</h1>
@@ -174,10 +177,28 @@ export default function FactoryOrderDetail() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Package size={14} className="text-stone-400" />
+            <div>
+              <p className="text-xs text-stone-400">{t('executionType')}</p>
+              <div className="mt-1">
+                <ExecutionTypeBadge executionType={order.execution_type} size="sm" />
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
             <Calendar size={14} className="text-stone-400" />
             <div>
               <p className="text-xs text-stone-400">{t('dueDate')}</p>
               <p className="text-sm font-medium">{formatDate(order.due_date)}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <FileDown size={14} className="text-stone-400" />
+            <div>
+              <p className="text-xs text-stone-400">{t('designLink')}</p>
+              <div className="mt-1">
+                <DesignLink url={order.design_url} />
+              </div>
             </div>
           </div>
         </div>

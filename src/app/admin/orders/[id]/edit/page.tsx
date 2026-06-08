@@ -6,14 +6,16 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { ArrowRight, FileDown, Image as ImageIcon, Package, Paperclip, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
-import { Attachment, Factory, Order, OrderStatus, ProductType } from '@/types'
+import { Attachment, ExecutionType, Factory, Order, OrderStatus, ProductType } from '@/types'
 import {
+  getExecutionTypeOptions,
   getOrderStatusOptions,
   getProductTypeLabel,
   getProductTypeOptions,
   isImageAttachment,
   PRODUCT_DETAIL_FIELDS_BY_LOCALE,
 } from '@/lib/orders'
+import { normalizeOptionalUrl } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import { usePreferences } from '@/lib/i18n'
 
@@ -49,6 +51,7 @@ export default function AdminOrderEditPage() {
   const { profile, loading: authLoading } = useAuth()
   const { locale, t } = usePreferences()
   const productTypeOptions = getProductTypeOptions(locale)
+  const executionTypeOptions = getExecutionTypeOptions(locale)
   const statusOptions = getOrderStatusOptions(locale)
 
   const [loading, setLoading] = useState(true)
@@ -56,6 +59,8 @@ export default function AdminOrderEditPage() {
   const [factories, setFactories] = useState<Factory[]>([])
   const [order, setOrder] = useState<Order | null>(null)
   const [productType, setProductType] = useState<ProductType | ''>('')
+  const [executionType, setExecutionType] = useState<ExecutionType | ''>('')
+  const [designUrl, setDesignUrl] = useState('')
   const [details, setDetails] = useState<Record<string, string>>({})
   const [factoryId, setFactoryId] = useState('')
   const [status, setStatus] = useState<OrderStatus>('pending')
@@ -93,6 +98,8 @@ export default function AdminOrderEditPage() {
         const loadedOrder = orderData as Order
         setOrder(loadedOrder)
         setProductType(loadedOrder.product_type || '')
+        setExecutionType(loadedOrder.execution_type || '')
+        setDesignUrl(loadedOrder.design_url || '')
         setDetails(normalizeDetails(loadedOrder.product_type || '', loadedOrder.details))
         setFactoryId(loadedOrder.assigned_factory_id || '')
         setStatus(loadedOrder.status)
@@ -298,10 +305,20 @@ export default function AdminOrderEditPage() {
     let uploadedFiles: UploadedOrderFile[] = []
 
     try {
+      let normalizedDesignUrl = ''
+      try {
+        normalizedDesignUrl = normalizeOptionalUrl(designUrl)
+      } catch {
+        toast.error(t('invalidDesignLink'))
+        return
+      }
+
       const { error: orderError } = await supabase
         .from('orders')
         .update({
           product_type: productType,
+          execution_type: executionType || null,
+          design_url: normalizedDesignUrl || null,
           details: buildOrderDetails(),
           assigned_factory_id: factoryId || null,
           status,
@@ -462,6 +479,32 @@ export default function AdminOrderEditPage() {
                 dir="ltr"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-stone-700">{t('executionType')}</label>
+            <select
+              value={executionType}
+              onChange={event => setExecutionType(event.target.value as ExecutionType | '')}
+              className="w-full appearance-none rounded-xl border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-400"
+            >
+              <option value="">{locale === 'ar' ? 'غير محدد' : 'Not specified'}</option>
+              {executionTypeOptions.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-stone-700">{t('designLink')}</label>
+            <input
+              type="url"
+              value={designUrl}
+              onChange={event => setDesignUrl(event.target.value)}
+              placeholder={locale === 'ar' ? 'مثال: www.example.com/design' : 'Example: www.example.com/design'}
+              className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-400"
+              dir="ltr"
+            />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">

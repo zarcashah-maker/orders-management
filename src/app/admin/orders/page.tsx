@@ -2,12 +2,14 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Order, Factory, OrderStatus } from '@/types'
+import { ExecutionType, Order, Factory, OrderStatus } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { UrgentBadge } from '@/components/shared/UrgentBadge'
+import { ExecutionTypeBadge } from '@/components/shared/ExecutionTypeBadge'
 import { formatDate } from '@/lib/utils'
 import {
   getOrderThumbnail,
+  getExecutionTypeOptions,
   getProductTypeLabel,
   getOrderStatusOptions,
   getProductTypeOptions,
@@ -25,11 +27,13 @@ export default function AdminOrdersPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [factoryFilter, setFactoryFilter] = useState('')
   const [productFilter, setProductFilter] = useState('')
+  const [executionTypeFilter, setExecutionTypeFilter] = useState('')
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list')
   const supabase = useMemo(() => createClient(), [])
   const { locale, t } = usePreferences()
   const statusOptions = getOrderStatusOptions(locale)
   const productOptions = getProductTypeOptions(locale)
+  const executionTypeOptions = getExecutionTypeOptions(locale)
   const STATUS_FILTER_OPTIONS = [{ value: '', label: t('allStatuses') }, ...statusOptions]
   const PRODUCT_FILTER_OPTIONS = [{ value: '', label: t('allProducts') }, ...productOptions]
 
@@ -42,11 +46,12 @@ export default function AdminOrdersPage() {
     if (statusFilter) query = query.eq('status', statusFilter)
     if (factoryFilter) query = query.eq('assigned_factory_id', factoryFilter)
     if (productFilter) query = query.eq('product_type', productFilter)
+    if (executionTypeFilter) query = query.eq('execution_type', executionTypeFilter)
 
     const { data } = await query
     setOrders(data || [])
     setLoading(false)
-  }, [statusFilter, factoryFilter, productFilter, supabase])
+  }, [statusFilter, factoryFilter, productFilter, executionTypeFilter, supabase])
 
   useEffect(() => {
     loadOrders()
@@ -99,6 +104,9 @@ export default function AdminOrdersPage() {
             {getProductTypeLabel(order.product_type, null, locale)}
           </Link>
           <p className="text-xs text-stone-400 mt-0.5 font-mono">{order.order_number}</p>
+          <span className="mt-1 inline-flex">
+            <ExecutionTypeBadge executionType={order.execution_type} size="sm" />
+          </span>
           {order.is_urgent && (
             <span className="mt-1 inline-flex">
               <UrgentBadge size="sm" />
@@ -175,6 +183,17 @@ export default function AdminOrdersPage() {
             <option key={f.id} value={f.id}>{f.name}</option>
           ))}
         </select>
+        <select
+          value={executionTypeFilter}
+          onChange={e => setExecutionTypeFilter(e.target.value as ExecutionType | '')}
+          className="px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-sm
+            focus:outline-none focus:ring-2 focus:ring-brand-400 appearance-none cursor-pointer"
+        >
+          <option value="">{locale === 'ar' ? 'كل أنواع التنفيذ' : 'All execution types'}</option>
+          {executionTypeOptions.map(option => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
         <div className="flex bg-white border border-stone-200 rounded-xl overflow-hidden">
           <button
             type="button"
@@ -236,6 +255,9 @@ export default function AdminOrdersPage() {
                             <div className="min-w-0">
                               <p className="text-sm font-medium text-stone-800 truncate">{getProductTypeLabel(order.product_type, null, locale)}</p>
                               <p className="text-xs font-mono text-stone-400">{order.order_number}</p>
+                              <div className="mt-1">
+                                <ExecutionTypeBadge executionType={order.execution_type} size="sm" />
+                              </div>
                             </div>
                           </div>
                           {order.is_urgent && <div className="mt-2"><UrgentBadge size="sm" /></div>}
@@ -256,6 +278,7 @@ export default function AdminOrdersPage() {
                   <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{t('internalOrderNumber')}</th>
                   <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{t('sallaOrderNumber')}</th>
                   <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{t('productType')}</th>
+                  <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{t('executionType')}</th>
                   <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{t('customerPhone')}</th>
                   <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{t('factory')}</th>
                   <th className="text-right px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{t('status')}</th>
@@ -279,6 +302,9 @@ export default function AdminOrdersPage() {
                     </td>
                     <td className="px-5 py-4">
                       <OrderSummary order={order} />
+                    </td>
+                    <td className="px-5 py-4">
+                      <ExecutionTypeBadge executionType={order.execution_type} size="sm" />
                     </td>
                     <td className="px-5 py-4 text-sm text-stone-600">
                       {order.customer_phone || '—'}

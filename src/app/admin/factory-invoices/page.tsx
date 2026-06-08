@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase'
 import { Factory, FactoryInvoice, Order } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { UrgentBadge } from '@/components/shared/UrgentBadge'
+import { ExecutionTypeBadge } from '@/components/shared/ExecutionTypeBadge'
 import { formatCurrencySar, formatDate } from '@/lib/utils'
 import { getProductTypeLabel } from '@/lib/orders'
 import { useAuth } from '@/hooks/useAuth'
@@ -49,6 +50,7 @@ export default function AdminFactoryInvoicesPage() {
       supabase
         .from('factory_invoices')
         .select('*, factory:factories(*)')
+        .neq('status', 'cancelled')
         .order('created_at', { ascending: false }),
     ])
 
@@ -243,6 +245,7 @@ export default function AdminFactoryInvoicesPage() {
                   <th className="px-4 py-3 text-right"></th>
                   <th className="px-4 py-3 text-right">{t('internalOrderNumber')}</th>
                   <th className="px-4 py-3 text-right">{t('productType')}</th>
+                  <th className="px-4 py-3 text-right">{t('executionType')}</th>
                   <th className="px-4 py-3 text-right">{t('factory')}</th>
                   <th className="px-4 py-3 text-right">{t('status')}</th>
                   <th className="px-4 py-3 text-right">{t('executionCost')}</th>
@@ -271,6 +274,9 @@ export default function AdminFactoryInvoicesPage() {
                         <span>{getProductTypeLabel(order.product_type, null, locale)}</span>
                         {order.is_urgent && <UrgentBadge size="sm" />}
                       </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <ExecutionTypeBadge executionType={order.execution_type} size="sm" />
                     </td>
                     <td className="px-4 py-3 text-sm text-stone-600">{order.factory?.name || '—'}</td>
                     <td className="px-4 py-3">
@@ -322,7 +328,9 @@ export default function AdminFactoryInvoicesPage() {
               <div key={invoice.id} className="p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="font-mono text-sm font-semibold text-stone-900">{invoice.invoice_number}</p>
+                    <Link href={`/admin/factory-invoices/${invoice.id}`} className="font-mono text-sm font-semibold text-brand-600 hover:text-brand-700">
+                      {invoice.invoice_number}
+                    </Link>
                     <p className="text-sm text-stone-500">{invoice.factory?.name || '—'} · {invoice.order_count} {t('orders')}</p>
                     <p className="text-xs text-stone-400">{formatDate(invoice.created_at)}</p>
                   </div>

@@ -1,4 +1,4 @@
-import { Attachment, Order, OrderStatus, ProductType } from '@/types'
+import { Attachment, ExecutionType, Order, OrderStatus, ProductType } from '@/types'
 import type { Locale } from '@/lib/i18n'
 
 export const PRODUCT_TYPE_LABELS: Record<Locale, Record<ProductType, string>> = {
@@ -19,6 +19,17 @@ export const PRODUCT_TYPE_LABELS: Record<Locale, Record<ProductType, string>> = 
     hoodie: 'Hoodie',
     tshirt: 'T-shirt',
     other: 'Other Product',
+  },
+}
+
+export const EXECUTION_TYPE_LABELS: Record<Locale, Record<ExecutionType, string>> = {
+  ar: {
+    printing: 'طباعة',
+    embroidery: 'تطريز',
+  },
+  en: {
+    printing: 'Printing',
+    embroidery: 'Embroidery',
   },
 }
 
@@ -228,6 +239,13 @@ export function getProductTypeOptions(locale: Locale = 'ar') {
   }))
 }
 
+export function getExecutionTypeOptions(locale: Locale = 'ar') {
+  return (Object.keys(EXECUTION_TYPE_LABELS[locale]) as ExecutionType[]).map(value => ({
+    value,
+    label: EXECUTION_TYPE_LABELS[locale][value],
+  }))
+}
+
 export const PRODUCT_TYPE_OPTIONS = getProductTypeOptions('ar')
 
 export function getOrderStatusOptions(locale: Locale = 'ar') {
@@ -242,6 +260,11 @@ export const ORDER_STATUS_OPTIONS = getOrderStatusOptions('ar')
 export function getProductTypeLabel(productType: ProductType | null | undefined, fallback?: string | null, locale: Locale = 'ar') {
   if (productType && PRODUCT_TYPE_LABELS[locale][productType]) return PRODUCT_TYPE_LABELS[locale][productType]
   return fallback || (locale === 'ar' ? 'غير محدد' : 'Not set')
+}
+
+export function getExecutionTypeLabel(executionType: ExecutionType | null | undefined, locale: Locale = 'ar') {
+  if (executionType && EXECUTION_TYPE_LABELS[locale][executionType]) return EXECUTION_TYPE_LABELS[locale][executionType]
+  return locale === 'ar' ? 'غير محدد' : 'Not specified'
 }
 
 export function getOrderStatusLabel(status: OrderStatus, locale: Locale = 'ar') {

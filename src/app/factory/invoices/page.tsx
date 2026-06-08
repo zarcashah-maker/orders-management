@@ -37,6 +37,7 @@ export default function FactoryInvoicesPage() {
           .from('factory_invoices')
           .select('*')
           .eq('factory_id', profile.factory_id)
+          .neq('status', 'cancelled')
           .order('created_at', { ascending: false }),
       ])
       setPendingOrders((pending || []) as Order[])

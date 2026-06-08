@@ -2,13 +2,15 @@
 
 import { useEffect, useId, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Factory, ProductType } from '@/types'
+import { ExecutionType, Factory, ProductType } from '@/types'
 import {
+  getExecutionTypeOptions,
   getProductTypeLabel,
   PRODUCT_DETAIL_FIELDS_BY_LOCALE,
   getProductTypeOptions,
   isImageAttachment,
 } from '@/lib/orders'
+import { normalizeOptionalUrl } from '@/lib/utils'
 import { usePreferences } from '@/lib/i18n'
 import { X, Package, Image as ImageIcon, Paperclip } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -51,6 +53,8 @@ type StoredDraftFile = {
 
 type AddOrderDraft = {
   productType: ProductType | ''
+  executionType: ExecutionType | ''
+  designUrl: string
   details: Record<string, string>
   sallaOrderNumber: string
   customerPhone: string
@@ -144,6 +148,8 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
   const designImagesRef = useRef<File[]>([])
   const attachmentsRef = useRef<File[]>([])
   const [productType, setProductType] = useState<ProductType | ''>('')
+  const [executionType, setExecutionType] = useState<ExecutionType | ''>('')
+  const [designUrl, setDesignUrl] = useState('')
   const [details, setDetails] = useState<Record<string, string>>({})
   const [sallaOrderNumber, setSallaOrderNumber] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
@@ -161,6 +167,7 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
   const { profile } = useAuth()
   const { locale, t } = usePreferences()
   const productTypeOptions = getProductTypeOptions(locale)
+  const executionTypeOptions = getExecutionTypeOptions(locale)
   const isPage = variant === 'page'
 
   function logForm(message: string, data?: Record<string, unknown>) {
@@ -179,6 +186,8 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
           const draft = JSON.parse(saved) as Partial<AddOrderDraft>
           if (cancelled) return
           setProductType(draft.productType || '')
+          setExecutionType(draft.executionType || '')
+          setDesignUrl(draft.designUrl || '')
           setDetails(draft.details || {})
           setSallaOrderNumber(draft.sallaOrderNumber || '')
           setCustomerPhone(draft.customerPhone || '')
@@ -230,7 +239,7 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
     if (!draftRestored) return
     persistDraft()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftRestored, productType, details, sallaOrderNumber, customerPhone, notes, isUrgent, factoryId, quantity, dueDate])
+  }, [draftRestored, productType, executionType, designUrl, details, sallaOrderNumber, customerPhone, notes, isUrgent, factoryId, quantity, dueDate])
 
   useEffect(() => {
     function handlePageShow(event: PageTransitionEvent) {
@@ -249,11 +258,13 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
       window.removeEventListener('pagehide', handlePageHide)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productType, details, sallaOrderNumber, customerPhone, notes, isUrgent, factoryId, quantity, dueDate])
+  }, [productType, executionType, designUrl, details, sallaOrderNumber, customerPhone, notes, isUrgent, factoryId, quantity, dueDate])
 
   function persistDraft() {
     const draft: AddOrderDraft = {
       productType,
+      executionType,
+      designUrl,
       details,
       sallaOrderNumber,
       customerPhone,
@@ -280,6 +291,14 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
     let orderWasInserted = false
 
     try {
+      let normalizedDesignUrl = ''
+      try {
+        normalizedDesignUrl = normalizeOptionalUrl(designUrl)
+      } catch {
+        toast.error(t('invalidDesignLink'))
+        return
+      }
+
       const orderDetails = buildOrderDetails()
       const currentDesignImages = designImagesRef.current
       const currentAttachments = attachmentsRef.current
@@ -310,6 +329,8 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
         salla_order_number: sallaOrderNumber.trim() || null,
         customer_phone: customerPhone.trim() || null,
         product_type: productType,
+        execution_type: executionType || null,
+        design_url: normalizedDesignUrl || null,
         details: orderDetails,
         assigned_factory_id: factoryId,
         quantity: quantity ? parseInt(quantity) : 1,
@@ -774,6 +795,32 @@ export function AddOrderForm({ factories, onCancel, onCreated, variant = 'page' 
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-stone-700 mb-1.5">{t('executionType')}</label>
+          <select
+            value={executionType}
+            onChange={e => setExecutionType(e.target.value as ExecutionType | '')}
+            className="w-full px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent appearance-none"
+          >
+            <option value="">{locale === 'ar' ? 'غير محدد' : 'Not specified'}</option>
+            {executionTypeOptions.map(option => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-stone-700 mb-1.5">{t('designLink')}</label>
+          <input
+            type="url"
+            value={designUrl}
+            onChange={e => setDesignUrl(e.target.value)}
+            placeholder={locale === 'ar' ? 'مثال: www.example.com/design' : 'Example: www.example.com/design'}
+            className="w-full px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+            dir="ltr"
+          />
         </div>
 
         <div className="grid sm:grid-cols-2 gap-3">

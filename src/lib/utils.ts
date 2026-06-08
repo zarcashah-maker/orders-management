@@ -33,6 +33,21 @@ export function formatCurrencySar(amount: number | string | null | undefined): s
   }).format(value)} ريال`
 }
 
+export function normalizeOptionalUrl(value: string | null | undefined): string {
+  const trimmed = (value || '').trim()
+  if (!trimmed) return ''
+
+  const hasScheme = /^[a-z][a-z\d+\-.]*:/i.test(trimmed)
+  const candidate = hasScheme ? trimmed : `https://${trimmed}`
+  const url = new URL(candidate)
+
+  if (!['http:', 'https:'].includes(url.protocol) || !url.hostname) {
+    throw new Error('Invalid URL')
+  }
+
+  return url.toString()
+}
+
 export function generateOrderNumber(): string {
   const now = new Date()
   const year = now.getFullYear().toString().slice(-2)

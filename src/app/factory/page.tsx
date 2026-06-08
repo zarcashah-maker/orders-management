@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Order, OrderStatus } from '@/types'
+import { ExecutionType, Order, OrderStatus } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { UrgentBadge } from '@/components/shared/UrgentBadge'
+import { ExecutionTypeBadge } from '@/components/shared/ExecutionTypeBadge'
 import { formatDate } from '@/lib/utils'
 import {
   getFactoryOrderType,
+  getExecutionTypeOptions,
   getOrderStatusOptions,
   getOrderThumbnail,
   getProductTypeOptions,
@@ -22,12 +24,14 @@ export default function FactoryDashboard() {
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('')
   const [productFilter, setProductFilter] = useState('')
+  const [executionTypeFilter, setExecutionTypeFilter] = useState('')
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list')
   const { profile } = useAuth()
   const { locale, t } = usePreferences()
   const supabase = createClient()
   const statusOptions = getOrderStatusOptions(locale)
   const productOptions = getProductTypeOptions(locale)
+  const executionTypeOptions = getExecutionTypeOptions(locale)
 
   useEffect(() => {
     if (!profile?.factory_id) return
@@ -45,7 +49,8 @@ export default function FactoryDashboard() {
 
   const filteredOrders = orders.filter(order =>
     (!statusFilter || order.status === statusFilter) &&
-    (!productFilter || order.product_type === productFilter)
+    (!productFilter || order.product_type === productFilter) &&
+    (!executionTypeFilter || order.execution_type === executionTypeFilter)
   )
   const pending = orders.filter(o => o.status === 'pending').length
   const sewing = orders.filter(o => o.status === 'sewing').length
@@ -112,6 +117,16 @@ export default function FactoryDashboard() {
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
+            <select
+              value={executionTypeFilter}
+              onChange={e => setExecutionTypeFilter(e.target.value as ExecutionType | '')}
+              className="px-3 py-2 bg-white border border-stone-200 rounded-xl text-xs appearance-none focus:outline-none focus:ring-2 focus:ring-brand-400"
+            >
+              <option value="">{locale === 'ar' ? 'كل أنواع التنفيذ' : 'All execution types'}</option>
+              {executionTypeOptions.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
             <div className="flex bg-white border border-stone-200 rounded-xl overflow-hidden">
               <button
                 type="button"
@@ -171,6 +186,9 @@ export default function FactoryDashboard() {
                             <div className="min-w-0">
                               <p className="font-medium text-stone-900 truncate">{getFactoryOrderType(order.product_type, undefined, locale)}</p>
                               <p className="font-mono text-xs text-stone-400">{order.order_number}</p>
+                              <div className="mt-1">
+                                <ExecutionTypeBadge executionType={order.execution_type} size="sm" />
+                              </div>
                               {order.is_urgent && (
                                 <span className="mt-1 inline-flex">
                                   <UrgentBadge size="sm" />
@@ -210,6 +228,7 @@ export default function FactoryDashboard() {
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-mono text-xs text-stone-400">{order.order_number}</span>
                       <StatusBadge status={order.status as OrderStatus} size="sm" />
+                      <ExecutionTypeBadge executionType={order.execution_type} size="sm" />
                       {order.is_urgent && <UrgentBadge size="sm" />}
                     </div>
                     <p className="font-medium text-stone-900 truncate">{getFactoryOrderType(order.product_type, undefined, locale)}</p>

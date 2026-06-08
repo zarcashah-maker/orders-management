@@ -18,8 +18,9 @@ export type ProductType =
   | 'tshirt'
   | 'other'
 
+export type ExecutionType = 'printing' | 'embroidery'
 export type FactoryCostStatus = 'pending' | 'approved' | 'paid'
-export type FactoryInvoiceStatus = 'pending' | 'approved' | 'paid'
+export type FactoryInvoiceStatus = 'pending' | 'approved' | 'paid' | 'cancelled'
 
 export interface Profile {
   id: string
@@ -49,6 +50,8 @@ export interface Order {
   customer_name: string | null
   customer_phone: string | null
   product_type: ProductType | null
+  execution_type: ExecutionType | null
+  design_url: string | null
   details: Record<string, unknown> | null
   status: OrderStatus
   assigned_factory_id: string | null

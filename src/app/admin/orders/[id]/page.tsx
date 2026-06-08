@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase'
 import { Order, Factory, OrderStatus, AIChatMessage } from '@/types'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { UrgentBadge } from '@/components/shared/UrgentBadge'
+import { ExecutionTypeBadge } from '@/components/shared/ExecutionTypeBadge'
+import { DesignLink } from '@/components/shared/DesignLink'
 import { formatCurrencySar, formatDate, formatDateTime } from '@/lib/utils'
 import { getDetailEntries, getOrderStatusOptions, getProductTypeLabel, isImageAttachment } from '@/lib/orders'
 import {
@@ -146,6 +148,7 @@ export default function OrderDetailPage() {
             status: order.status,
             factory: (order.factory as unknown as Factory)?.name,
             details: order.details,
+            design_url: order.design_url,
             quantity: order.quantity,
             due_date: order.due_date,
             notes: order.general_notes,
@@ -202,6 +205,7 @@ export default function OrderDetailPage() {
                 {order.order_number}
               </span>
               <StatusBadge status={order.status} />
+              <ExecutionTypeBadge executionType={order.execution_type} />
               {order.is_urgent && <UrgentBadge />}
             </div>
             <h1 className="text-xl font-display font-bold text-stone-900">{getProductTypeLabel(order.product_type, null, locale)}</h1>
@@ -265,6 +269,15 @@ export default function OrderDetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Package size={15} className="text-stone-400" />
+            <div>
+              <p className="text-xs text-stone-400">{t('executionType')}</p>
+              <div className="mt-1">
+                <ExecutionTypeBadge executionType={order.execution_type} size="sm" />
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
             <Hash size={15} className="text-stone-400" />
             <div>
               <p className="text-xs text-stone-400">{t('quantity')}</p>
@@ -297,6 +310,15 @@ export default function OrderDetailPage() {
             <div>
               <p className="text-xs text-stone-400">{t('sallaOrderNumber')}</p>
               <p className="text-sm font-medium text-stone-700" dir="ltr">{order.salla_order_number || '—'}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <FileDown size={15} className="text-stone-400" />
+            <div>
+              <p className="text-xs text-stone-400">{t('designLink')}</p>
+              <div className="mt-1">
+                <DesignLink url={order.design_url} />
+              </div>
             </div>
           </div>
         </div>
